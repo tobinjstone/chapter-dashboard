@@ -110,6 +110,81 @@ const CHAPTER_ALIASES = {
   YVR: "Vancouver",
 };
 
+// A Luma tag is short ("Twin Cities"); the chapter's real name lives in the
+// roster sheet ("Twin Cities New Liberals"). The widget shows the full name,
+// so the mapping belongs here rather than in the browser.
+const CHAPTER_FULL_NAMES = {
+  "amsterdam"        : "Amsterdam New Liberals",
+  "atlanta"          : "Atlanta New Liberals",
+  "austin"           : "Austin New Liberals",
+  "baltimore"        : "Baltimore New Liberals",
+  "bay area"         : "Bay Area New Liberals",
+  "berlin"           : "Neoliberal Berlin",
+  "boston"           : "Boston New Liberals",
+  "botswana"         : "Botswana New Liberals",
+  "brussels"         : "Brussels New Liberals",
+  "buenos aires"     : "Neoliberales Buenos Aires",
+  "calgary"          : "Calgary New Liberals",
+  "charlotte"        : "Charlotte New Liberals",
+  "charlottesville"  : "Charlottesville New Liberals",
+  "chicago"          : "Chicago New Liberals",
+  "cincinnati"       : "Cincinnati New Liberals",
+  "cleveland"        : "Cleveland New Liberals",
+  "columbus"         : "Columbus New Liberals",
+  "dallas"           : "Dallas New Liberals",
+  "dc"               : "DMV New Liberals",
+  "denver"           : "Denver New Liberals",
+  "des moines"       : "Des Moines New Liberals",
+  "detroit"          : "Detroit New Liberals",
+  "dhaka"            : "Dhaka New Liberals",
+  "drc"              : "Democratic Republic of the Congo New Liberals",
+  "dublin"           : "Dublin New Liberals",
+  "hartford"         : "Hartford New Liberals",
+  "houston"          : "Houston CNL",
+  "huntsville"       : "Advance Huntsville",
+  "indianapolis"     : "Indianapolis New Liberals",
+  "jersey city"      : "Jersey City New Liberals",
+  "johannesburg"     : "Johannesburg New Liberals",
+  "kansas city"      : "Kansas City New Liberals",
+  "kenya"            : "Kenya New Liberals",
+  "lexington"        : "Lexington New Liberals",
+  "london (uk)"      : "London New Liberals",
+  "los angeles"      : "LA New Liberals",
+  "manchester (nh)"  : "Manchester New Liberals",
+  "melbourne"        : "Melbourne New Progressives",
+  "miami"            : "Miami New Liberals",
+  "milwaukee"        : "Milwaukee New Liberals",
+  "nashville"        : "Nashville New Liberals",
+  "new orleans"      : "New Orleans New Liberals",
+  "nyc"              : "NYC New Liberals",
+  "ole miss"         : "Ole Miss New Liberals",
+  "omaha"            : "Omaha New Liberals",
+  "orlando"          : "Orlando New Liberals",
+  "ottawa"           : "Ottawa New Liberals",
+  "philly"           : "Philly New Liberals",
+  "phoenix"          : "Phoenix New Liberals",
+  "pittsburgh"       : "Pittsburgh New Liberals",
+  "portland (oregon)": "Portland New Liberals",
+  "providence"       : "Providence New Liberals",
+  "puerto rico"      : "Puerto Rico New Liberals",
+  "raleigh-durham"   : "Raleigh-Durham New Liberals",
+  "richmond"         : "Richmond Neoliberals",
+  "salt lake city"   : "Salt Lake City New Liberals",
+  "san antonio"      : "San Antonio New Liberals",
+  "san diego"        : "San Diego New Liberals",
+  "santa cruz"       : "Santa Cruz New Liberals",
+  "seattle"          : "Seattle New Liberals",
+  "st. louis"        : "St. Louis New Liberals",
+  "stockholm"        : "Stockholm New Liberals",
+  "taipei"           : "Taipei New Liberals",
+  "toronto"          : "Toronto New Liberals",
+  "twin cities"      : "Twin Cities New Liberals",
+  "uofa"             : "University of Alabama New Liberals",
+  "vancouver"        : "Vancouver New Liberals",
+  "warsaw"           : "Warsaw Neoliberals",
+  "zimbabwe"         : "Zimbabwe New Liberals",
+};
+
 function resolveChapter(raw) {
   const trimmed = raw.trim();
   if (!trimmed) return "";
@@ -348,6 +423,8 @@ function normalizeEvent(entry) {
 
   const isOnline = (e.location_type || "").toLowerCase() === "online" || Boolean(e.meeting_url);
 
+  const chapterNames = chapters.map((c) => CHAPTER_FULL_NAMES[c.toLowerCase()] || c);
+
   return {
     id: e.api_id || entry.api_id || eventUrl,
     name: e.name || "Untitled event",
@@ -357,6 +434,7 @@ function normalizeEvent(entry) {
     timezone: e.timezone || "America/New_York",
     cover_url: e.cover_url || null,
     chapters,
+    chapter_names: chapterNames,
     location: {
       type: isOnline ? "online" : "offline",
       venue: geo.address || geo.name || null,

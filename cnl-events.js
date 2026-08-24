@@ -106,6 +106,16 @@
       media.classList.add("cnl-event__media--empty");
     }
 
+    // Full chapter name ("Twin Cities New Liberals"), resolved by the Worker
+    // from the short Luma tag. Falls back to the tag if the Worker is older.
+    var chapterLabel =
+      (event.chapter_names && event.chapter_names[0]) ||
+      (event.chapters && event.chapters[0]) ||
+      "";
+    if (chapterLabel) {
+      media.appendChild(el("span", "cnl-event__chip", chapterLabel));
+    }
+
     var dateBlock = el("div", "cnl-event__date");
     dateBlock.appendChild(el("span", "cnl-event__month", p.month));
     dateBlock.appendChild(el("span", "cnl-event__day", p.day));
@@ -118,25 +128,16 @@
     var meta = el("p", "cnl-event__meta");
     meta.appendChild(el("span", null, p.full + DOT + p.time + " " + p.zone));
 
-    var place =
-      event.location.type === "online"
-        ? "Online"
-        : event.location.city_state || event.location.venue;
-    var chapter = event.chapters && event.chapters.length ? event.chapters[0] : "";
-    // Chapter and place are often the same idea said twice ("Denver" /
-    // "Denver, CO"). Show both only when neither contains the other, and
-    // prefer the more specific string when one does.
+    // The chapter has moved to the chip, so this line is now where the event
+    // actually is: venue first, then the city it sits in.
+    var loc = event.location || {};
     var where;
-    if (chapter && place) {
-      var c = chapter.toLowerCase();
-      var q = place.toLowerCase();
-      if (c.indexOf(q) !== -1 || q.indexOf(c) !== -1) {
-        where = chapter.length >= place.length ? chapter : place;
-      } else {
-        where = chapter + DOT + place;
-      }
+    if (loc.type === "online") {
+      where = "Online";
+    } else if (loc.venue && loc.city_state && loc.venue !== loc.city_state) {
+      where = loc.venue + DOT + loc.city_state;
     } else {
-      where = chapter || place;
+      where = loc.venue || loc.city_state || "";
     }
     if (where) meta.appendChild(el("span", null, where));
 

@@ -11,12 +11,16 @@
   --cnl-red: #9f3c39;
   --cnl-cream: #fdfbe9;
 
-  /* Card surface. The card is dark, so its text tokens are separate from the
-     page tokens above. */
-  --cnl-card: #232c4f;
-  --cnl-card-ink: #f7f5e6;
-  --cnl-card-muted: rgba(247, 245, 230, 0.6);
-  --cnl-media-bg: #1a2140;
+  /* Deep red used for the offset block behind the tile. */
+  --cnl-red-dark: #531d1b;
+
+  /* Card surface: a cream tile designed to sit on a CNL navy section. Set that
+     background on the Squarespace section itself - the widget styles the tiles,
+     not the band behind them. */
+  --cnl-card: var(--cnl-cream);
+  --cnl-card-ink: var(--cnl-navy);
+  --cnl-card-muted: rgba(44, 54, 89, 0.68);
+  --cnl-media-bg: #e9e5cd;
 
   /* Both faces are already served by the Squarespace page: ff-tisa-web-pro via
      the site's Typekit kit, Domine via Squarespace's own font CDN. They are
@@ -38,11 +42,32 @@
 
   /* Narrowest a card may get before the grid drops a column. Raise for fewer,
      wider cards; lower for more, narrower ones. */
-  --cnl-col-min: 320px;
+  --cnl-col-min: 260px;
 
-  /* Cover images are usually chapter logos, so they are fitted whole rather
-     than cropped. Switch to `cover` if you move to photographic covers. */
-  --cnl-media-fit: contain;
+  /* Luma covers are square (chapter logos), so the media box is square too:
+     the image fills it exactly, with no letterboxing and nothing cropped.
+     Widen this (e.g. 4 / 3) if covers ever become photographic. */
+  --cnl-media-aspect: 1 / 1;
+  --cnl-media-fit: cover;
+
+  --cnl-card-border: 2.5px solid var(--cnl-red);
+
+  /* Date badge and chapter chip. Navy so they read against the cream tile. */
+  --cnl-badge-bg: var(--cnl-navy);
+  --cnl-badge-ink: var(--cnl-cream);
+
+  /* Offset block, carried over from the CNL emails. */
+  --cnl-shadow: 4px 4px 0 0 var(--cnl-red-dark);
+  --cnl-shadow-hover: 7px 7px 0 0 var(--cnl-red-dark);
+
+  /* Fill for events with no cover image. Tokenised because a gradient tuned
+     for a dark tile turns muddy on a light one. */
+  --cnl-placeholder: linear-gradient(135deg, #f2eed6, #e2dcc0 55%, rgba(159, 60, 57, 0.22));
+
+  /* Empty and error states sit on the section background, not on a tile, so
+     these are light to read against the navy band. */
+  --cnl-message-ink: rgba(253, 251, 233, 0.72);
+  --cnl-message-border: rgba(253, 251, 233, 0.3);
 
   /* --- Base -------------------------------------------------------------- */
   font-family: var(--cnl-font-body);
@@ -75,17 +100,19 @@
   display: flex;
   flex-direction: column;
   background: var(--cnl-card);
+  border: var(--cnl-card-border);
   border-radius: var(--cnl-radius);
   padding: 0.7rem;
   text-decoration: none;
   color: var(--cnl-card-ink);
+  box-shadow: var(--cnl-shadow);
   transition: transform 160ms ease, box-shadow 160ms ease;
 }
 
 .cnl-event:hover,
 .cnl-event:focus-visible {
   transform: translateY(-3px);
-  box-shadow: 0 10px 24px rgba(44, 54, 89, 0.28);
+  box-shadow: var(--cnl-shadow-hover);
 }
 
 .cnl-event:focus-visible {
@@ -99,7 +126,7 @@
 
 .cnl-event__media {
   position: relative;
-  aspect-ratio: 16 / 10;
+  aspect-ratio: var(--cnl-media-aspect);
   border-radius: var(--cnl-radius-media);
   overflow: hidden;
   background: var(--cnl-media-bg);
@@ -117,7 +144,35 @@
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, rgba(159, 60, 57, 0.35), rgba(26, 33, 64, 0.9));
+  background: var(--cnl-placeholder);
+}
+
+/* Chapter chip, floated over the top-left of the image. Shares the badge
+   tokens with the date so the two corners always match. */
+.cnl-event__chip {
+  position: absolute;
+  top: 0.55rem;
+  left: 0.55rem;
+  z-index: 1;
+  /* Leave room for the date badge opposite. */
+  max-width: calc(100% - 4.4rem);
+  padding: 0.3rem 0.45rem;
+  background: var(--cnl-badge-bg);
+  color: var(--cnl-badge-ink);
+  border-radius: var(--cnl-radius-badge);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  font-family: var(--cnl-font-meta);
+  font-weight: 700;
+  font-size: 0.6rem;
+  line-height: 1.25;
+  text-transform: none;
+  letter-spacing: normal;
+  /* Long names ("Democratic Republic of the Congo New Liberals") would
+     otherwise swallow the artwork. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 /* Date badge, floated over the top-right of the image. */
@@ -131,8 +186,8 @@
   align-items: center;
   gap: 0.1rem;
   padding: 0.32rem 0.5rem 0.38rem;
-  background: var(--cnl-cream);
-  color: var(--cnl-red);
+  background: var(--cnl-badge-bg);
+  color: var(--cnl-badge-ink);
   border-radius: var(--cnl-radius-badge);
   line-height: 1;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
@@ -193,12 +248,12 @@
 
 .cnl-events__message {
   grid-column: 1 / -1;
-  border: 2px dashed rgba(44, 54, 89, 0.22);
+  border: 2px dashed var(--cnl-message-border);
   border-radius: var(--cnl-radius);
   padding: 1.5rem 1.25rem;
   text-align: center;
   font-size: 0.95rem;
-  color: rgba(44, 54, 89, 0.62);
+  color: var(--cnl-message-ink);
 }
 
 .cnl-events__message a {

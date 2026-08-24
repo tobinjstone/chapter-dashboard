@@ -47,6 +47,12 @@
   /* --- Base -------------------------------------------------------------- */
   font-family: var(--cnl-font-body);
   color: var(--cnl-navy);
+  /* Site themes often set casing and tracking globally. Reset here so the
+     widget looks the same wherever it is embedded; the few places that do
+     want uppercase re-declare it below. */
+  text-transform: none;
+  letter-spacing: normal;
+  font-style: normal;
   display: grid;
   /* min() keeps a card from ever being wider than its container, so the grid
      collapses to one column in a narrow Squarespace column, not just on a
@@ -161,6 +167,12 @@
   font-size: 1.02rem;
   line-height: 1.32;
   font-weight: 700;
+  /* Squarespace themes commonly uppercase and letterspace every heading, and
+     an h3 rule in the theme outranks anything inherited from .cnl-events.
+     Event names are read as sentences, so they stay as written. */
+  text-transform: none;
+  letter-spacing: normal;
+  font-style: normal;
   margin: 0;
   color: var(--cnl-card-ink);
   overflow-wrap: anywhere;

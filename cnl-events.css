@@ -1,7 +1,8 @@
 /* ==========================================================================
    CNL Events widget
    Every brand decision lives in the token block below. Change colors, fonts,
-   and spacing there; you should not need to touch anything further down.
+   radii, and column width there; you should not need to touch anything
+   further down.
    ========================================================================== */
 
 .cnl-events {
@@ -9,22 +10,38 @@
   --cnl-navy: #2c3659;
   --cnl-red: #9f3c39;
   --cnl-cream: #fdfbe9;
-  --cnl-paper: #ffffff;
-  --cnl-rule: rgba(44, 54, 89, 0.18);
-  --cnl-muted: rgba(44, 54, 89, 0.62);
+
+  /* Card surface. The card is dark, so its text tokens are separate from the
+     page tokens above. */
+  --cnl-card: #232c4f;
+  --cnl-card-ink: #f7f5e6;
+  --cnl-card-muted: rgba(247, 245, 230, 0.6);
+  --cnl-media-bg: #1a2140;
 
   --cnl-font-display: Georgia, "Times New Roman", serif;
   --cnl-font-body: inherit; /* inherits the Squarespace body face by default */
 
-  --cnl-border-width: 2.5px;
-  --cnl-offset: 6px;
-  --cnl-gap: 1.25rem;
-  --cnl-radius: 0;
+  --cnl-radius: 14px;
+  --cnl-radius-media: 10px;
+  --cnl-radius-badge: 8px;
+  --cnl-gap: 1.5rem;
+
+  /* Narrowest a card may get before the grid drops a column. Raise for fewer,
+     wider cards; lower for more, narrower ones. */
+  --cnl-col-min: 320px;
+
+  /* Cover images are usually chapter logos, so they are fitted whole rather
+     than cropped. Switch to `cover` if you move to photographic covers. */
+  --cnl-media-fit: contain;
 
   /* --- Base -------------------------------------------------------------- */
   font-family: var(--cnl-font-body);
   color: var(--cnl-navy);
   display: grid;
+  /* min() keeps a card from ever being wider than its container, so the grid
+     collapses to one column in a narrow Squarespace column, not just on a
+     narrow viewport. */
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--cnl-col-min)), 1fr));
   gap: var(--cnl-gap);
   margin: 0;
   padding: 0;
@@ -39,127 +56,125 @@
 /* --- Event card ---------------------------------------------------------- */
 
 .cnl-event {
-  display: grid;
-  grid-template-columns: 5.5rem 1fr;
-  align-items: stretch;
-  background: var(--cnl-cream);
-  border: var(--cnl-border-width) solid var(--cnl-navy);
+  display: flex;
+  flex-direction: column;
+  background: var(--cnl-card);
   border-radius: var(--cnl-radius);
-  box-shadow: var(--cnl-offset) var(--cnl-offset) 0 0 var(--cnl-red);
+  padding: 0.7rem;
   text-decoration: none;
-  color: inherit;
-  transition: transform 140ms ease, box-shadow 140ms ease;
+  color: var(--cnl-card-ink);
+  transition: transform 160ms ease, box-shadow 160ms ease;
 }
 
 .cnl-event:hover,
 .cnl-event:focus-visible {
-  transform: translate(2px, 2px);
-  box-shadow: calc(var(--cnl-offset) - 2px) calc(var(--cnl-offset) - 2px) 0 0 var(--cnl-red);
+  transform: translateY(-3px);
+  box-shadow: 0 10px 24px rgba(44, 54, 89, 0.28);
 }
 
 .cnl-event:focus-visible {
   outline: 3px solid var(--cnl-red);
-  outline-offset: 4px;
+  outline-offset: 3px;
 }
 
-/* Date block */
+/* Media --------------------------------------------------------------------
+   A fixed aspect box keeps every card the same height regardless of how tall
+   the source image is. */
+
+.cnl-event__media {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  border-radius: var(--cnl-radius-media);
+  overflow: hidden;
+  background: var(--cnl-media-bg);
+}
+
+.cnl-event__img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: var(--cnl-media-fit);
+}
+
+/* Shown when an event has no cover image, or the image fails to load. */
+.cnl-event__media--empty::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(159, 60, 57, 0.35), rgba(26, 33, 64, 0.9));
+}
+
+/* Date badge, floated over the top-right of the image. */
 .cnl-event__date {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: 0.1rem;
-  padding: 0.9rem 0.5rem;
-  background: var(--cnl-navy);
-  color: var(--cnl-cream);
-  border-right: var(--cnl-border-width) solid var(--cnl-navy);
+  padding: 0.32rem 0.5rem 0.38rem;
+  background: var(--cnl-cream);
+  color: var(--cnl-red);
+  border-radius: var(--cnl-radius-badge);
+  line-height: 1;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 .cnl-event__month {
   font-family: var(--cnl-font-body);
-  font-size: 0.7rem;
+  font-size: 0.6rem;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  opacity: 0.85;
 }
 
 .cnl-event__day {
   font-family: var(--cnl-font-display);
-  font-size: 1.9rem;
+  font-size: 1.35rem;
   line-height: 1;
   font-weight: 400;
 }
 
-.cnl-event__weekday {
-  font-size: 0.65rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  opacity: 0.7;
-}
+/* Body --------------------------------------------------------------------- */
 
-/* Body */
 .cnl-event__body {
   display: grid;
-  gap: 0.35rem;
-  align-content: center;
-  padding: 1rem 1.1rem;
+  gap: 0.4rem;
+  padding: 0.85rem 0.4rem 0.4rem;
   min-width: 0;
-}
-
-.cnl-event__chapter {
-  justify-self: start;
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--cnl-red);
 }
 
 .cnl-event__title {
   font-family: var(--cnl-font-display);
-  font-size: 1.15rem;
-  line-height: 1.3;
-  font-weight: 400;
+  font-size: 1.02rem;
+  line-height: 1.32;
+  font-weight: 700;
   margin: 0;
+  color: var(--cnl-card-ink);
   overflow-wrap: anywhere;
 }
 
 .cnl-event__meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem 0.9rem;
-  font-size: 0.85rem;
-  color: var(--cnl-muted);
+  display: grid;
+  gap: 0.15rem;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--cnl-card-muted);
   margin: 0;
-}
-
-.cnl-event__meta span {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.cnl-event__cta {
-  justify-self: start;
-  margin-top: 0.35rem;
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--cnl-navy);
-  border-bottom: 2px solid var(--cnl-red);
-  padding-bottom: 2px;
 }
 
 /* --- States -------------------------------------------------------------- */
 
 .cnl-events__message {
-  border: var(--cnl-border-width) dashed var(--cnl-rule);
+  grid-column: 1 / -1;
+  border: 2px dashed rgba(44, 54, 89, 0.22);
+  border-radius: var(--cnl-radius);
   padding: 1.5rem 1.25rem;
   text-align: center;
   font-size: 0.95rem;
-  color: var(--cnl-muted);
+  color: rgba(44, 54, 89, 0.62);
 }
 
 .cnl-events__message a {
@@ -167,13 +182,13 @@
 }
 
 .cnl-skeleton {
-  height: 5.5rem;
-  border: var(--cnl-border-width) solid var(--cnl-rule);
+  height: 15rem;
+  border-radius: var(--cnl-radius);
   background: linear-gradient(
     90deg,
-    rgba(44, 54, 89, 0.05) 25%,
-    rgba(44, 54, 89, 0.11) 37%,
-    rgba(44, 54, 89, 0.05) 63%
+    rgba(44, 54, 89, 0.07) 25%,
+    rgba(44, 54, 89, 0.14) 37%,
+    rgba(44, 54, 89, 0.07) 63%
   );
   background-size: 400% 100%;
   animation: cnl-shimmer 1.3s ease-in-out infinite;
@@ -184,37 +199,17 @@
   100% { background-position: 0 50%; }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .cnl-skeleton { animation: none; }
+  .cnl-event { transition: none; }
+  .cnl-event:hover,
+  .cnl-event:focus-visible { transform: none; }
+}
+
 /* --- Mobile -------------------------------------------------------------- */
 
 @media (max-width: 540px) {
   .cnl-events {
-    --cnl-offset: 4px;
-  }
-
-  .cnl-event {
-    grid-template-columns: 1fr;
-  }
-
-  .cnl-event__date {
-    flex-direction: row;
-    justify-content: flex-start;
-    gap: 0.5rem;
-    padding: 0.5rem 1.1rem;
-    border-right: 0;
-    border-bottom: var(--cnl-border-width) solid var(--cnl-navy);
-  }
-
-  .cnl-event__day {
-    font-size: 1.15rem;
-  }
-}
-
-/* --- Accessibility -------------------------------------------------------- */
-
-@media (prefers-reduced-motion: reduce) {
-  .cnl-event,
-  .cnl-skeleton {
-    transition: none;
-    animation: none;
+    --cnl-gap: 1.1rem;
   }
 }

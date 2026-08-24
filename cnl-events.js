@@ -70,10 +70,14 @@
       month: fmt({ month: "short" }).toUpperCase(),
       day: fmt({ day: "numeric" }),
       weekday: fmt({ weekday: "short" }).toUpperCase(),
+      full: fmt({ month: "long", day: "numeric", year: "numeric" }),
       time: fmt({ hour: "numeric", minute: "2-digit" }),
       zone: fmt({ timeZoneName: "short" }).split(" ").pop(),
     };
   }
+
+  // Built without escape sequences so the separator survives any encoding.
+  var DOT = " " + String.fromCharCode(183) + " ";
 
   function card(event) {
     var p = parts(event.start_at, event.timezone);
@@ -83,35 +87,54 @@
     a.target = "_blank";
     a.rel = "noopener";
 
+    // --- media: Luma cover image, with the date floated over it ---
+    var media = el("div", "cnl-event__media");
+
+    if (event.cover_url) {
+      var img = el("img", "cnl-event__img");
+      img.src = event.cover_url;
+      img.alt = "";            // decorative; the title carries the meaning
+      img.loading = "lazy";
+      img.decoding = "async";
+      img.addEventListener("error", function () {
+        // A dead image URL should degrade to the placeholder, not a broken icon.
+        img.remove();
+        media.classList.add("cnl-event__media--empty");
+      });
+      media.appendChild(img);
+    } else {
+      media.classList.add("cnl-event__media--empty");
+    }
+
     var dateBlock = el("div", "cnl-event__date");
     dateBlock.appendChild(el("span", "cnl-event__month", p.month));
     dateBlock.appendChild(el("span", "cnl-event__day", p.day));
-    dateBlock.appendChild(el("span", "cnl-event__weekday", p.weekday));
+    media.appendChild(dateBlock);
 
+    // --- body ---
     var body = el("div", "cnl-event__body");
-
-    if (event.chapters && event.chapters.length) {
-      body.appendChild(el("span", "cnl-event__chapter", event.chapters[0]));
-    }
-
     body.appendChild(el("h3", "cnl-event__title", event.name));
 
     var meta = el("p", "cnl-event__meta");
-    meta.appendChild(el("span", null, p.time + " " + p.zone));
+    meta.appendChild(el("span", null, p.full + DOT + p.time + " " + p.zone));
 
     var place =
       event.location.type === "online"
         ? "Online"
         : event.location.city_state || event.location.venue;
-    if (place) meta.appendChild(el("span", null, place));
+    var chapter = event.chapters && event.chapters.length ? event.chapters[0] : "";
+    // Chapter and place are usually the same idea ("Denver"); show both only
+    // when they actually differ ("Bay Area / San Francisco").
+    var where = chapter && place && chapter !== place ? chapter + DOT + place : chapter || place;
+    if (where) meta.appendChild(el("span", null, where));
+
     body.appendChild(meta);
 
-    body.appendChild(el("span", "cnl-event__cta", "RSVP \u2192"));
-
-    a.appendChild(dateBlock);
+    a.appendChild(media);
     a.appendChild(body);
 
-    var label = event.name + ", " + p.weekday + " " + p.month + " " + p.day + ", " + p.time + " " + p.zone;
+    var label =
+      event.name + ", " + p.weekday + " " + p.month + " " + p.day + ", " + p.time + " " + p.zone;
     a.setAttribute("aria-label", label);
 
     return a;

@@ -123,9 +123,21 @@
         ? "Online"
         : event.location.city_state || event.location.venue;
     var chapter = event.chapters && event.chapters.length ? event.chapters[0] : "";
-    // Chapter and place are usually the same idea ("Denver"); show both only
-    // when they actually differ ("Bay Area / San Francisco").
-    var where = chapter && place && chapter !== place ? chapter + DOT + place : chapter || place;
+    // Chapter and place are often the same idea said twice ("Denver" /
+    // "Denver, CO"). Show both only when neither contains the other, and
+    // prefer the more specific string when one does.
+    var where;
+    if (chapter && place) {
+      var c = chapter.toLowerCase();
+      var q = place.toLowerCase();
+      if (c.indexOf(q) !== -1 || q.indexOf(c) !== -1) {
+        where = chapter.length >= place.length ? chapter : place;
+      } else {
+        where = chapter + DOT + place;
+      }
+    } else {
+      where = chapter || place;
+    }
     if (where) meta.appendChild(el("span", null, where));
 
     body.appendChild(meta);

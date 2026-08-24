@@ -18,8 +18,18 @@
   --cnl-card-muted: rgba(247, 245, 230, 0.6);
   --cnl-media-bg: #1a2140;
 
-  --cnl-font-display: Georgia, "Times New Roman", serif;
+  /* Both faces are already served by the Squarespace page: ff-tisa-web-pro via
+     the site's Typekit kit, Domine via Squarespace's own font CDN. They are
+     referenced here, never re-imported, so the widget adds no font requests
+     and cannot conflict with the site's loader. Off cnliberalism.org the
+     stacks fall back to Georgia. */
+  --cnl-font-display: "ff-tisa-web-pro", Georgia, "Times New Roman", serif;
+  --cnl-font-meta: "Domine", Georgia, "Times New Roman", serif;
   --cnl-font-body: inherit; /* inherits the Squarespace body face by default */
+
+  /* Domine is loaded at 600 and 700 only. Asking for 400 would make the
+     browser synthesise a lighter face; 600 is the real one. */
+  --cnl-weight-meta: 600;
 
   --cnl-radius: 14px;
   --cnl-radius-media: 10px;
@@ -123,7 +133,7 @@
 }
 
 .cnl-event__month {
-  font-family: var(--cnl-font-body);
+  font-family: var(--cnl-font-meta);
   font-size: 0.6rem;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -131,10 +141,10 @@
 }
 
 .cnl-event__day {
-  font-family: var(--cnl-font-display);
+  font-family: var(--cnl-font-meta);
   font-size: 1.35rem;
   line-height: 1;
-  font-weight: 400;
+  font-weight: 700;
 }
 
 /* Body --------------------------------------------------------------------- */
@@ -159,7 +169,9 @@
 .cnl-event__meta {
   display: grid;
   gap: 0.15rem;
-  font-size: 0.8rem;
+  font-family: var(--cnl-font-meta);
+  font-weight: var(--cnl-weight-meta);
+  font-size: 0.78rem;
   line-height: 1.4;
   color: var(--cnl-card-muted);
   margin: 0;

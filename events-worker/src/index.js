@@ -1,0 +1,366 @@
+/**
+ * CNL Events — Luma proxy Worker
+ *
+ * Holds the Luma API key server-side and returns a slim, stable JSON feed
+ * of upcoming events for the CNL website to render.
+ *
+ * Endpoints
+ *   GET /events                    all upcoming events
+ *   GET /events?chapter=ATL        only events tagged for that chapter
+ *   GET /events?limit=6            cap the number returned
+ *   GET /events?debug=1            include Luma's raw first entry (see DEBUG_TOKEN)
+ *   GET /health                    liveness check, no Luma call
+ *
+ * Secrets (wrangler secret put ...)
+ *   LUMA_API_KEY   required
+ *   DEBUG_TOKEN    optional; if set, ?debug=1 also requires &token=<value>
+ */
+
+const LUMA_BASE = "https://public-api.luma.com/v1";
+
+const FRESH_TTL = 300; // 5 min — how long a good response is served from cache
+const BACKUP_TTL = 86400; // 24 hr — last-known-good, served if Luma is down
+const MAX_PAGES = 5; // safety valve on pagination
+const PAGE_SIZE = 50;
+
+const ALLOWED_ORIGINS = [
+  "https://cnliberalism.org",
+  "https://www.cnliberalism.org",
+];
+
+// Squarespace preview/staging domains, so you can test before publishing.
+const ALLOWED_ORIGIN_SUFFIXES = [".squarespace.com"];
+
+// Chapter pages identify themselves by airport-style ChapterCode (DEN), but the
+// Luma tags are human-readable (Denver) because they show in Luma's public
+// calendar filter. This maps one to the other so ?chapter=DEN and
+// ?chapter=Denver both work.
+//
+// Generated from the chapter roster sheet that chapter.js reads. Add a row here
+// when a chapter is added, or its events page will silently show nothing.
+const CHAPTER_ALIASES = {
+  AMS: "Amsterdam",
+  ARN: "Stockholm",
+  ATL: "Atlanta",
+  AUS: "Austin",
+  BAA: "Buenos Aires",
+  BDL: "Hartford",
+  BER: "Berlin",
+  BNA: "Nashville",
+  BOS: "Boston",
+  BRU: "Brussels",
+  BWI: "Baltimore",
+  CAL: "Calgary",
+  CHI: "Chicago",
+  CHO: "Charlottesville",
+  CLT: "Charlotte",
+  CLV: "Cleveland",
+  CMH: "Columbus",
+  CVG: "Cincinnati",
+  DAC: "Dhaka",
+  DAL: "Dallas",
+  DCA: "DC",
+  DEN: "Denver",
+  DSM: "Des Moines",
+  DTW: "Detroit",
+  DUB: "Dublin",
+  EWR: "Jersey City",
+  FIH: "DRC",
+  GBE: "Botswana",
+  HOU: "Houston",
+  HRE: "Zimbabwe",
+  HSV: "Huntsville",
+  IND: "Indianapolis",
+  JNB: "Johannesburg",
+  KCM: "Kansas City",
+  LAX: "Los Angeles",
+  LEX: "Lexington",
+  LON: "London (UK)",
+  MCO: "Orlando",
+  MEL: "Melbourne",
+  MIA: "Miami",
+  MKE: "Milwaukee",
+  MNH: "Manchester (NH)",
+  MSP: "Twin Cities",
+  MSY: "New Orleans",
+  NBO: "Kenya",
+  NYC: "NYC",
+  OMA: "Omaha",
+  PDX: "Portland (Oregon)",
+  PHL: "Philly",
+  PHX: "Phoenix",
+  PIT: "Pittsburgh",
+  PVD: "Providence",
+  RDU: "Raleigh-Durham",
+  RVA: "Richmond",
+  SAN: "San Diego",
+  SAT: "San Antonio",
+  SEA: "Seattle",
+  SFO: "Bay Area",
+  SJC: "Santa Cruz",
+  SJU: "Puerto Rico",
+  SLC: "Salt Lake City",
+  STL: "St. Louis",
+  TCL: "UofA",
+  TOR: "Toronto",
+  TPE: "Taipei",
+  UOX: "Ole Miss",
+  WAW: "Warsaw",
+  YOW: "Ottawa",
+  YVR: "Vancouver",
+};
+
+function resolveChapter(raw) {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  const alias = CHAPTER_ALIASES[trimmed.toUpperCase()];
+  return (alias || trimmed).toLowerCase();
+}
+
+function isAllowedOrigin(origin) {
+  if (!origin) return false;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  try {
+    const host = new URL(origin).hostname;
+    return ALLOWED_ORIGIN_SUFFIXES.some((s) => host.endsWith(s));
+  } catch {
+    return false;
+  }
+}
+
+function corsHeaders(origin) {
+  // An Origin check is not a security control — it is trivially spoofed. It is
+  // here to keep other people's sites from casually embedding our feed. The
+  // real reason this endpoint is safe to expose is that it only ever returns
+  // event data that is already public on luma.com.
+  return {
+    "Access-Control-Allow-Origin": isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS[0],
+    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Max-Age": "86400",
+    Vary: "Origin",
+  };
+}
+
+function json(body, { status = 200, origin, maxAge = FRESH_TTL } = {}) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": `public, max-age=${maxAge}`,
+      ...corsHeaders(origin),
+    },
+  });
+}
+
+export default {
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    const origin = request.headers.get("Origin");
+
+    if (request.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: corsHeaders(origin) });
+    }
+    if (request.method !== "GET") {
+      return json({ error: "method_not_allowed" }, { status: 405, origin });
+    }
+    if (url.pathname === "/health") {
+      return json({ ok: true, time: new Date().toISOString() }, { origin, maxAge: 0 });
+    }
+    if (url.pathname !== "/events" && url.pathname !== "/") {
+      return json({ error: "not_found" }, { status: 404, origin });
+    }
+
+    const chapterRaw = (url.searchParams.get("chapter") || "").trim();
+    const chapter = resolveChapter(chapterRaw);
+    const limit = Math.min(parseInt(url.searchParams.get("limit") || "0", 10) || 0, 200);
+
+    let debug = url.searchParams.get("debug") === "1";
+    if (debug && env.DEBUG_TOKEN && url.searchParams.get("token") !== env.DEBUG_TOKEN) {
+      debug = false;
+    }
+
+    // Cache key ignores chapter/limit: we fetch the full feed once and filter
+    // in memory, so 40 chapter pages share a single upstream call.
+    const cacheKey = new Request(new URL("/events", url.origin).toString(), {
+      method: "GET",
+    });
+    const backupKey = new Request(new URL("/events__backup", url.origin).toString(), {
+      method: "GET",
+    });
+    const cache = caches.default;
+
+    let payload = null;
+    let served = "network";
+
+    const cached = await cache.match(cacheKey);
+    if (cached && !debug) {
+      payload = await cached.json();
+      served = "cache";
+    }
+
+    if (!payload) {
+      try {
+        payload = await fetchAllEvents(env.LUMA_API_KEY, debug);
+        const fresh = new Response(JSON.stringify(payload), {
+          headers: { "Content-Type": "application/json", "Cache-Control": `max-age=${FRESH_TTL}` },
+        });
+        const backup = new Response(JSON.stringify(payload), {
+          headers: { "Content-Type": "application/json", "Cache-Control": `max-age=${BACKUP_TTL}` },
+        });
+        ctx.waitUntil(cache.put(cacheKey, fresh));
+        ctx.waitUntil(cache.put(backupKey, backup));
+      } catch (err) {
+        const backup = await cache.match(backupKey);
+        if (backup) {
+          payload = await backup.json();
+          served = "stale";
+        } else {
+          // Return 200 with an empty list so the widget shows its empty state
+          // instead of a broken page. The error field is for you, not visitors.
+          return json(
+            { events: [], count: 0, served: "error", error: String(err) },
+            { origin, maxAge: 30 }
+          );
+        }
+      }
+    }
+
+    let events = payload.events;
+    const warnings = [...(payload.warnings || [])];
+
+    if (chapter) {
+      const matched = events.filter((e) =>
+        e.chapters.some((c) => c.toLowerCase() === chapter)
+      );
+      if (matched.length === 0 && events.length > 0 && !payload.anyTags) {
+        // No event anywhere carried tag data — the filter is not working, and
+        // silently returning zero events would look like "no upcoming events".
+        warnings.push(
+          "No tag data present on any event. Chapter filtering is inactive; returning unfiltered feed."
+        );
+      } else {
+        // A chapter that matches no tag in the feed renders exactly like a
+        // chapter with nothing scheduled. Across 40 pages a misspelled tag
+        // would stay invisible, so name the possibility out loud.
+        const known = payload.known_chapters || [];
+        const isKnown = known.some((c) => c.toLowerCase() === chapter);
+        if (matched.length === 0 && known.length && !isKnown) {
+          warnings.push(
+            `Chapter "${chapterRaw}" matched no upcoming event. If this chapter ` +
+              `should have events, check the tag spelling in Luma. Tags ` +
+              `currently in use: ${known.join(", ")}.`
+          );
+        }
+        events = matched;
+      }
+    }
+
+    if (limit) events = events.slice(0, limit);
+
+    return json(
+      {
+        events,
+        count: events.length,
+        served,
+        generated_at: payload.generated_at,
+        known_chapters: payload.known_chapters || [],
+        ...(warnings.length ? { warnings } : {}),
+        ...(debug ? { raw_sample: payload.raw_sample } : {}),
+      },
+      { origin }
+    );
+  },
+};
+
+async function fetchAllEvents(apiKey, debug) {
+  if (!apiKey) throw new Error("LUMA_API_KEY is not set");
+
+  const events = [];
+  let cursor = null;
+  let rawSample = null;
+  let anyTags = false;
+  const knownChapters = new Set();
+
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const qs = new URLSearchParams();
+    // NOTE: verify these param names against docs.luma.com once your key is
+    // live. If Luma 400s, hit /events?debug=1 and read the error body — the
+    // likely culprits are `after` and `pagination_limit`.
+    qs.set("after", new Date().toISOString());
+    qs.set("pagination_limit", String(PAGE_SIZE));
+    qs.set("sort_column", "start_at");
+    qs.set("sort_direction", "asc");
+    if (cursor) qs.set("pagination_cursor", cursor);
+
+    const res = await fetch(`${LUMA_BASE}/calendar/list-events?${qs}`, {
+      headers: { "x-luma-api-key": apiKey, accept: "application/json" },
+    });
+
+    if (!res.ok) {
+      throw new Error(`Luma ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    }
+
+    const data = await res.json();
+    const entries = data.entries || data.events || [];
+
+    if (debug && !rawSample && entries.length) rawSample = entries[0];
+
+    for (const entry of entries) {
+      const normalized = normalizeEvent(entry);
+      if (!normalized) continue;
+      if (normalized.chapters.length) anyTags = true;
+      for (const c of normalized.chapters) knownChapters.add(c);
+      events.push(normalized);
+    }
+
+    if (!data.has_more) break;
+    cursor = data.next_cursor;
+    if (!cursor) break;
+  }
+
+  events.sort((a, b) => a.start_at.localeCompare(b.start_at));
+
+  return {
+    events,
+    anyTags,
+    known_chapters: [...knownChapters].sort(),
+    generated_at: new Date().toISOString(),
+    ...(rawSample ? { raw_sample: rawSample } : {}),
+  };
+}
+
+function normalizeEvent(entry) {
+  // Luma nests the event under `event` on list responses; tolerate both shapes.
+  const e = entry.event || entry;
+  if (!e || !e.start_at) return null;
+
+  const geo = e.geo_address_info || e.geo_address_json || {};
+
+  // Chapter tags may arrive on the entry or the event, as objects or strings.
+  const rawTags = entry.tags || e.tags || entry.event_tags || [];
+  const chapters = rawTags
+    .map((t) => (typeof t === "string" ? t : t.name || t.slug || ""))
+    .filter(Boolean);
+
+  const slug = e.url || e.slug || "";
+  const eventUrl = slug.startsWith("http") ? slug : `https://luma.com/${slug}`;
+
+  const isOnline = (e.location_type || "").toLowerCase() === "online" || Boolean(e.meeting_url);
+
+  return {
+    id: e.api_id || entry.api_id || eventUrl,
+    name: e.name || "Untitled event",
+    url: eventUrl,
+    start_at: e.start_at,
+    end_at: e.end_at || null,
+    timezone: e.timezone || "America/New_York",
+    cover_url: e.cover_url || null,
+    chapters,
+    location: {
+      type: isOnline ? "online" : "offline",
+      venue: geo.address || geo.name || null,
+      city_state: geo.city_state || [geo.city, geo.region].filter(Boolean).join(", ") || null,
+    },
+  };
+}

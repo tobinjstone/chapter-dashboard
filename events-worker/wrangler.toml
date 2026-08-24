@@ -1,0 +1,10 @@
+name = "cnl-events"
+main = "src/index.js"
+compatibility_date = "2026-08-24"
+
+# Deploys to https://cnl-events.<your-subdomain>.workers.dev
+workers_dev = true
+
+# Secrets are NOT set here. Run these once after the first deploy:
+#   npx wrangler secret put LUMA_API_KEY
+#   npx wrangler secret put DEBUG_TOKEN     (optional)

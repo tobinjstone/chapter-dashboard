@@ -96,6 +96,46 @@
     return input ? input.value.trim() : "";
   }
 
+  /**
+   * Custom time picker: hour / minute / AM-PM selects, minutes limited to
+   * 15-minute stops. Native <input type=time> can't constrain its minute
+   * wheel, so we own the control. composeTime() turns the trio back into
+   * the "HH:MM" (24h) string the Worker expects.
+   */
+  function timeField(idPrefix, labelText) {
+    var wrap = el("div", { class: "cnl-ef-field", "data-field": idPrefix });
+    wrap.appendChild(el("span", { class: "cnl-ef-label", text: labelText }));
+    var group = el("div", { class: "cnl-ef-timegroup" });
+    var hour = el("select", { name: idPrefix + "_hour", class: "cnl-ef-input", "aria-label": labelText + " hour" });
+    hour.appendChild(el("option", { value: "", text: "--" }));
+    for (var h = 1; h <= 12; h++) {
+      hour.appendChild(el("option", { value: String(h), text: String(h) }));
+    }
+    var minute = el("select", { name: idPrefix + "_minute", class: "cnl-ef-input", "aria-label": labelText + " minutes" });
+    ["00", "15", "30", "45"].forEach(function (m) {
+      minute.appendChild(el("option", { value: m, text: ":" + m }));
+    });
+    var ampm = el("select", { name: idPrefix + "_ampm", class: "cnl-ef-input", "aria-label": labelText + " AM or PM" });
+    ampm.appendChild(el("option", { value: "", text: "--" }));
+    ampm.appendChild(el("option", { value: "AM", text: "AM" }));
+    ampm.appendChild(el("option", { value: "PM", text: "PM" }));
+    group.appendChild(hour);
+    group.appendChild(minute);
+    group.appendChild(ampm);
+    wrap.appendChild(group);
+    wrap.appendChild(el("p", { class: "cnl-ef-inline-error", role: "alert", "aria-live": "polite" }));
+    return wrap;
+  }
+
+  /** "HH:MM" in 24h from a timeField trio, or "" if hour/AM-PM unchosen. */
+  function composeTime(idPrefix) {
+    var h = val(idPrefix + "_hour");
+    var ap = val(idPrefix + "_ampm");
+    if (!h || !ap) return "";
+    var hh = (Number(h) % 12) + (ap === "PM" ? 12 : 0);
+    return String(hh).padStart(2, "0") + ":" + (val(idPrefix + "_minute") || "00");
+  }
+
   // ---------- build the form ----------
   function build() {
     var form = el("form", { class: "cnl-ef-form", novalidate: "novalidate" });
@@ -163,14 +203,12 @@
     var dateRow = el("div", { class: "cnl-ef-row" });
     dateRow.appendChild(field("start_date", "Start date",
       el("input", { type: "date", name: "start_date", class: "cnl-ef-input", min: minDate, required: "" })));
-    dateRow.appendChild(field("start_time", "Start time",
-      el("input", { type: "time", name: "start_time", class: "cnl-ef-input", step: "900", required: "" })));
+    dateRow.appendChild(timeField("start_time", "Start time"));
     colA.appendChild(dateRow);
     var endRow = el("div", { class: "cnl-ef-row" });
     endRow.appendChild(field("end_date", "End date",
       el("input", { type: "date", name: "end_date", class: "cnl-ef-input", min: minDate, required: "" })));
-    endRow.appendChild(field("end_time", "End time",
-      el("input", { type: "time", name: "end_time", class: "cnl-ef-input", step: "900", required: "" })));
+    endRow.appendChild(timeField("end_time", "End time"));
     colA.appendChild(endRow);
     colA.appendChild(el("p", { class: "cnl-ef-hint cnl-ef-tz-hint" }));
 
@@ -270,7 +308,7 @@
     // Reviewer notes + passcode
     colB.appendChild(field("reviewer_notes", "Notes for the reviewer (optional)",
       el("textarea", { name: "reviewer_notes", class: "cnl-ef-input", rows: "3" }),
-      "Only CNL staff see this — it won't be published."));
+      "Only CNL staff see this. Feel free to add any details such as estimated cost, speakers, etc."));
     if (passcodeRequired) {
       colB.appendChild(field("passcode", "Submission passcode",
         el("input", { type: "password", name: "passcode", class: "cnl-ef-input", autocomplete: "off" }),
@@ -679,11 +717,15 @@
     var name = val("event_name");
     if (name.length < 3 || name.length > 100) errors.event_name = "Event name must be 3–100 characters.";
     if (!val("description")) errors.description = "A description is required.";
-    if (!val("start_date") || !val("start_time")) errors.start_date = "Start date and time are required.";
-    if (!val("end_date") || !val("end_time")) errors.end_date = "End date and time are required.";
-    if (val("start_date") && val("end_date")) {
-      var s = val("start_date") + "T" + val("start_time");
-      var e = val("end_date") + "T" + val("end_time");
+    var startTime = composeTime("start_time");
+    var endTime = composeTime("end_time");
+    if (!val("start_date")) errors.start_date = "A start date is required.";
+    if (!startTime) errors.start_time = "Pick an hour and AM/PM.";
+    if (!val("end_date")) errors.end_date = "An end date is required.";
+    if (!endTime) errors.end_time = "Pick an hour and AM/PM.";
+    if (val("start_date") && val("end_date") && startTime && endTime) {
+      var s = val("start_date") + "T" + startTime;
+      var e = val("end_date") + "T" + endTime;
       if (e <= s) errors.end_date = "The event must end after it starts.";
     }
     var fmt = ctx.currentFormat();
@@ -729,11 +771,13 @@
         var fmt = ctx.currentFormat();
         fd.append("chapter_code", presetChapter || val("chapter_code"));
         ["submitter_name", "submitter_email", "event_name", "description",
-          "start_date", "start_time", "end_date", "end_time",
+          "start_date", "end_date",
           "location_note", "meeting_url", "max_capacity", "reviewer_notes",
           "passcode", "website_url"].forEach(function (n) {
             fd.append(n, val(n));
           });
+        fd.append("start_time", composeTime("start_time"));
+        fd.append("end_time", composeTime("end_time"));
         fd.append("event_format", fmt);
         fd.append("event_type", val("event_type"));
         if (fmt !== "online") {

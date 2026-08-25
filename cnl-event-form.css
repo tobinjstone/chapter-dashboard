@@ -161,6 +161,18 @@
   gap: 14px;
 }
 
+/* Hour / minute / AM-PM trio of the custom time picker. */
+.cnl-event-form .cnl-ef-timegroup {
+  display: flex;
+  gap: 8px;
+}
+
+.cnl-event-form .cnl-ef-timegroup .cnl-ef-input {
+  width: auto;
+  flex: 1;
+  min-width: 0;
+}
+
 .cnl-event-form .cnl-ef-row .cnl-ef-field {
   flex: 1;
 }

@@ -1,22 +1,50 @@
 /* CNL event intake form. Every selector is scoped under .cnl-event-form and
    every class is cnl-ef- prefixed: this widget lands in pages whose CSS we
-   don't control, and must neither inherit nor leak. */
+   don't control, and must neither inherit nor leak.
+
+   Fonts: ff-tisa-web-pro + pragmatica-extended from the CNL Typekit kit,
+   Domine from Google Fonts. Loaded here so the widget is self-sufficient on
+   pages that don't already include the kit. */
+@import url("https://use.typekit.net/kxb6xor.css");
+@import url("https://fonts.googleapis.com/css2?family=Domine:wght@400;500;700&display=swap");
 
 .cnl-event-form {
   --cnl-ef-navy: #2c3659;
   --cnl-ef-cream: #fdfbe9;
   --cnl-ef-red: #9f3c39;
+  --cnl-ef-red-dark: #531d1b;
   --cnl-ef-ink: #22293f;
   --cnl-ef-line: #c9c4a8;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: "Domine", Georgia, "Times New Roman", serif;
   color: var(--cnl-ef-ink);
   background: var(--cnl-ef-cream);
-  border: 2px solid var(--cnl-ef-navy);
-  box-shadow: 6px 6px 0 var(--cnl-ef-red);
+  border: 2px solid var(--cnl-ef-red);
+  border-radius: 15px;
+  box-shadow: 6px 6px 0 var(--cnl-ef-red-dark);
   padding: 28px;
   max-width: 640px;
   margin: 0 auto;
   box-sizing: border-box;
+}
+
+/* Two-column layout on desktop: the JS builds two .cnl-ef-col stacks —
+   column A ends after location/meeting link, column B holds the rest. On
+   narrow screens they simply stack. */
+@media (min-width: 900px) {
+  .cnl-event-form {
+    /* The calc keeps a side gutter even in a full-bleed host container. */
+    max-width: min(1400px, calc(100% - 48px));
+    padding: 34px 40px;
+  }
+  .cnl-event-form .cnl-ef-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 40px;
+    align-items: start;
+  }
+  .cnl-event-form .cnl-ef-banner {
+    grid-column: 1 / -1;
+  }
 }
 
 .cnl-event-form *,
@@ -26,9 +54,12 @@
 }
 
 .cnl-event-form .cnl-ef-section {
-  font-family: Georgia, serif;
+  font-family: "pragmatica-extended", "Arial Black", sans-serif;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   color: var(--cnl-ef-navy);
-  font-size: 1.2em;
+  font-size: 1.1em;
   margin: 28px 0 6px;
   padding-bottom: 4px;
   border-bottom: 2px solid var(--cnl-ef-navy);
@@ -40,12 +71,17 @@
 
 .cnl-event-form .cnl-ef-label {
   display: block;
-  font-weight: bold;
+  font-family: "ff-tisa-web-pro", Georgia, serif;
+  font-weight: 800;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   color: var(--cnl-ef-navy);
   margin-bottom: 4px;
 }
 
 .cnl-event-form .cnl-ef-hint {
+  font-family: "Domine", Georgia, serif;
   font-size: 0.85em;
   color: #5a5f72;
   margin: 2px 0 6px;
@@ -58,7 +94,7 @@
   color: var(--cnl-ef-ink);
   background: #fff;
   border: 1px solid var(--cnl-ef-navy);
-  border-radius: 0;
+  border-radius: 5px;
   padding: 9px 10px;
 }
 
@@ -71,6 +107,53 @@
   background: transparent;
   border: none;
   padding-left: 0;
+}
+
+/* The native "Choose file" button, restyled as a small CNL button. */
+.cnl-event-form .cnl-ef-file::file-selector-button {
+  font-family: "ff-tisa-web-pro", Georgia, serif;
+  font-weight: 800;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--cnl-ef-cream);
+  background: var(--cnl-ef-navy);
+  border: none;
+  border-radius: 6px;
+  padding: 9px 14px;
+  margin-right: 12px;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 var(--cnl-ef-red);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.cnl-event-form .cnl-ef-file::file-selector-button:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--cnl-ef-red);
+}
+
+/* Small CNL-styled action button (e.g. "+ Add a co-host"). */
+.cnl-event-form .cnl-ef-btn-small {
+  display: inline-block;
+  justify-self: start;
+  font-family: "ff-tisa-web-pro", Georgia, serif;
+  font-weight: 800;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--cnl-ef-cream);
+  background: var(--cnl-ef-navy);
+  border: none;
+  border-radius: 6px;
+  padding: 9px 14px;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 var(--cnl-ef-red);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.cnl-event-form .cnl-ef-btn-small:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--cnl-ef-red);
 }
 
 .cnl-event-form .cnl-ef-row {
@@ -127,6 +210,7 @@
   padding: 0;
   border: 1px solid var(--cnl-ef-navy);
   border-top: none;
+  border-radius: 0 0 5px 5px;
   background: #fff;
   max-height: 220px;
   overflow-y: auto;
@@ -147,6 +231,7 @@
 .cnl-event-form .cnl-ef-picked {
   background: #fff;
   border: 1px dashed var(--cnl-ef-navy);
+  border-radius: 5px;
   padding: 8px 10px;
   margin: 6px 0 0;
   font-size: 0.95em;
@@ -184,27 +269,44 @@
   margin: 18px 0 0;
 }
 
+/* Submit matches the CNL site's form buttons (see chapter.css): pragmatica,
+   uppercase, hard offset shadow, translate pop on hover, push on press. */
 .cnl-event-form .cnl-ef-submit {
+  -webkit-appearance: none;
+  appearance: none;
   display: block;
   width: 100%;
   margin-top: 22px;
-  padding: 13px;
-  font-family: Georgia, serif;
-  font-size: 1.05em;
-  font-weight: bold;
+  margin-bottom: 16px; /* clears the offset shadow so the note below reads */
+  height: 46px;
+  font-family: "pragmatica-extended", "Arial Black", sans-serif;
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
   color: var(--cnl-ef-cream);
   background: var(--cnl-ef-navy);
   border: none;
+  border-radius: 8px;
   cursor: pointer;
-  transition: background 0.15s;
+  box-shadow: 5px 5px 0 var(--cnl-ef-red);
+  transform: translate(0, 0);
+  transition: all 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 .cnl-event-form .cnl-ef-submit:hover:not(:disabled) {
-  background: var(--cnl-ef-red);
+  transform: translate(-2px, -2px);
+  box-shadow: 8px 8px 0 var(--cnl-ef-red);
+}
+
+.cnl-event-form .cnl-ef-submit:active:not(:disabled) {
+  transform: translate(4px, 4px);
+  box-shadow: 0 0 0 var(--cnl-ef-red);
 }
 
 .cnl-event-form .cnl-ef-submit:disabled {
   background: #8a8fa3;
+  box-shadow: 5px 5px 0 #c5c1a9;
   cursor: wait;
 }
 

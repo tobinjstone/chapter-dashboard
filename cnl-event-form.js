@@ -113,47 +113,48 @@
     });
     form.appendChild(honeypot);
 
+    // Two fixed columns on desktop (see CSS media query): A holds everything
+    // through the location/meeting fields, B the rest. They stack on mobile.
+    var colA = el("div", { class: "cnl-ef-col" });
+    var colB = el("div", { class: "cnl-ef-col" });
+    form.appendChild(colA);
+    form.appendChild(colB);
+
     // Chapter
     if (presetChapter && chapters.some(function (c) { return c.code === presetChapter; })) {
       var hidden = el("input", { type: "hidden", name: "chapter_code", value: presetChapter });
       form.appendChild(hidden);
     } else {
-      var select = el("select", { name: "chapter_code", class: "cnl-ef-input" });
-      select.appendChild(el("option", { value: "", text: "Choose your chapter…" }));
-      chapters.forEach(function (c) {
-        select.appendChild(el("option", { value: c.code, text: c.name }));
+      // Searchable combobox: type-to-filter over the 69 chapters. The real
+      // value lives in the hidden chapter_code input; the visible input is
+      // display only.
+      form.appendChild(el("input", { type: "hidden", name: "chapter_code" }));
+      var chSearchInput = el("input", {
+        type: "text", name: "chapter_search", class: "cnl-ef-input",
+        placeholder: "Start typing your chapter…", autocomplete: "off",
+        role: "combobox", "aria-expanded": "false", "aria-autocomplete": "list",
       });
-      form.appendChild(field("chapter_code", "Chapter", select));
+      var chField = field("chapter_code", "Chapter", chSearchInput);
+      var chSuggBox = el("ul", { class: "cnl-ef-suggestions", role: "listbox", style: "display:none" });
+      chField.insertBefore(chSuggBox, chField.querySelector(".cnl-ef-inline-error"));
+      colA.appendChild(chField);
     }
 
     // Submitter
-    form.appendChild(el("h3", { class: "cnl-ef-section", text: "About you" }));
-    form.appendChild(field("submitter_name", "Your name",
+    colA.appendChild(el("h3", { class: "cnl-ef-section", text: "About you" }));
+    colA.appendChild(field("submitter_name", "Your name",
       el("input", { type: "text", name: "submitter_name", class: "cnl-ef-input", autocomplete: "name", required: "" })));
-    form.appendChild(field("submitter_email", "Your email",
+    colA.appendChild(field("submitter_email", "Your email",
       el("input", { type: "email", name: "submitter_email", class: "cnl-ef-input", autocomplete: "email", required: "" }),
       "You'll be added as a host and can manage the event in Luma."));
 
     // Event basics
-    form.appendChild(el("h3", { class: "cnl-ef-section", text: "The event" }));
-    form.appendChild(field("event_name", "Event name",
+    colA.appendChild(el("h3", { class: "cnl-ef-section", text: "The event" }));
+    colA.appendChild(field("event_name", "Event name",
       el("input", { type: "text", name: "event_name", class: "cnl-ef-input", maxlength: "100", required: "" })));
-    form.appendChild(field("description", "Description",
+    colA.appendChild(field("description", "Description",
       el("textarea", { name: "description", class: "cnl-ef-input", rows: "6", required: "" }),
       "This is the public event page text. Plain text; basic Markdown like **bold** works."));
-
-    // 15-minute suggestion list for the time inputs. A datalist (unlike the
-    // step attribute) makes the browser show these as a dropdown, while still
-    // accepting any hand-typed time.
-    var timeList = el("datalist", { id: "cnl-ef-times" });
-    for (var h = 0; h < 24; h++) {
-      for (var m = 0; m < 60; m += 15) {
-        timeList.appendChild(el("option", {
-          value: String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0"),
-        }));
-      }
-    }
-    form.appendChild(timeList);
 
     var today = new Date();
     var minDate = today.getFullYear() + "-" +
@@ -163,15 +164,15 @@
     dateRow.appendChild(field("start_date", "Start date",
       el("input", { type: "date", name: "start_date", class: "cnl-ef-input", min: minDate, required: "" })));
     dateRow.appendChild(field("start_time", "Start time",
-      el("input", { type: "time", name: "start_time", class: "cnl-ef-input", step: "900", list: "cnl-ef-times", required: "" })));
-    form.appendChild(dateRow);
+      el("input", { type: "time", name: "start_time", class: "cnl-ef-input", step: "900", required: "" })));
+    colA.appendChild(dateRow);
     var endRow = el("div", { class: "cnl-ef-row" });
     endRow.appendChild(field("end_date", "End date",
       el("input", { type: "date", name: "end_date", class: "cnl-ef-input", min: minDate, required: "" })));
     endRow.appendChild(field("end_time", "End time",
-      el("input", { type: "time", name: "end_time", class: "cnl-ef-input", step: "900", list: "cnl-ef-times", required: "" })));
-    form.appendChild(endRow);
-    form.appendChild(el("p", { class: "cnl-ef-hint cnl-ef-tz-hint" }));
+      el("input", { type: "time", name: "end_time", class: "cnl-ef-input", step: "900", required: "" })));
+    colA.appendChild(endRow);
+    colA.appendChild(el("p", { class: "cnl-ef-hint cnl-ef-tz-hint" }));
 
     // Format
     var fmtWrap = el("div", { class: "cnl-ef-field", "data-field": "event_format" });
@@ -187,7 +188,7 @@
     });
     fmtWrap.appendChild(fmtGroup);
     fmtWrap.appendChild(el("p", { class: "cnl-ef-inline-error", role: "alert" }));
-    form.appendChild(fmtWrap);
+    colA.appendChild(fmtWrap);
 
     // Location (in_person / hybrid)
     var locBlock = el("div", { class: "cnl-ef-location" });
@@ -216,70 +217,73 @@
 
     locBlock.appendChild(field("location_note", "Location notes (optional)",
       el("input", { type: "text", name: "location_note", class: "cnl-ef-input", placeholder: "e.g. enter through the side door" })));
-    form.appendChild(locBlock);
+    colA.appendChild(locBlock);
 
     // Meeting URL (online / hybrid)
     var meetBlock = field("meeting_url", "Meeting link",
       el("input", { type: "url", name: "meeting_url", class: "cnl-ef-input", placeholder: "https://…" }));
-    form.appendChild(meetBlock);
+    colA.appendChild(meetBlock);
 
     // Event type
     var typeSelect = el("select", { name: "event_type", class: "cnl-ef-input" });
     [["action", "Action"], ["community", "Community"], ["policy", "Policy"], ["social", "Social"]].forEach(function (pair) {
       typeSelect.appendChild(el("option", { value: pair[0], text: pair[1] }));
     });
-    form.appendChild(field("event_type", "Event type", typeSelect));
+    colB.appendChild(el("h3", { class: "cnl-ef-section", text: "Details" }));
+    colB.appendChild(field("event_type", "Event type", typeSelect));
 
-    form.appendChild(field("max_capacity", "Max capacity (optional)",
+    colB.appendChild(field("max_capacity", "Max capacity (optional)",
       el("input", { type: "number", name: "max_capacity", class: "cnl-ef-input", min: "1", step: "1" }),
       "Leave blank for no cap."));
 
     // Cover image + crop
-    form.appendChild(el("h3", { class: "cnl-ef-section", text: "Cover image" }));
+    colB.appendChild(el("h3", { class: "cnl-ef-section", text: "Cover image" }));
     var fileInput = el("input", { type: "file", name: "cover_file", accept: "image/jpeg,image/png", class: "cnl-ef-input cnl-ef-file" });
-    form.appendChild(field("cover_image", "Upload a cover (JPEG or PNG, under 10 MB)",
+    colB.appendChild(field("cover_image", "Upload a cover (JPEG or PNG, under 10 MB)",
       fileInput, "Covers are square. Drag the box to choose the crop."));
     var cropWrap = el("div", { class: "cnl-ef-crop", style: "display:none" });
-    form.appendChild(cropWrap);
+    colB.appendChild(cropWrap);
 
     // Co-hosts
-    form.appendChild(el("h3", { class: "cnl-ef-section", text: "Hosts" }));
-    form.appendChild(el("p", { class: "cnl-ef-hint", text: "You're the first host. Add up to two more; they'll get a Luma invite once the event is approved." }));
+    colB.appendChild(el("h3", { class: "cnl-ef-section", text: "Hosts" }));
+    colB.appendChild(el("p", { class: "cnl-ef-hint", text: "You're the first host. Add up to two more; they'll get a Luma invite once the event is approved." }));
     for (var i = 1; i <= 3; i++) {
       var row = el("div", { class: "cnl-ef-cohost", "data-cohost": String(i) });
       if (i > 1) row.style.display = "none";
-      row.appendChild(field("cohost_" + i + "_name", i === 1 ? "Host name" : "Co-host " + i + " name",
+      var pair = el("div", { class: "cnl-ef-row" });
+      pair.appendChild(field("cohost_" + i + "_name", i === 1 ? "Host name" : "Co-host " + i + " name",
         el("input", { type: "text", name: "cohost_" + i + "_name", class: "cnl-ef-input" })));
-      row.appendChild(field("cohost_" + i + "_email", i === 1 ? "Host email" : "Co-host " + i + " email",
+      pair.appendChild(field("cohost_" + i + "_email", i === 1 ? "Host email" : "Co-host " + i + " email",
         el("input", { type: "email", name: "cohost_" + i + "_email", class: "cnl-ef-input" })));
+      row.appendChild(pair);
       var showLab = el("label", { class: "cnl-ef-check" });
       var showBox = el("input", { type: "checkbox", name: "cohost_" + i + "_show_on_page" });
       showBox.checked = true;
       showLab.appendChild(showBox);
       showLab.appendChild(document.createTextNode(" Show on the public event page"));
       row.appendChild(showLab);
-      form.appendChild(row);
+      colB.appendChild(row);
     }
-    var addCohost = el("button", { type: "button", class: "cnl-ef-linklike", text: "+ Add a co-host" });
-    form.appendChild(addCohost);
+    var addCohost = el("button", { type: "button", class: "cnl-ef-btn-small", text: "+ Add a co-host" });
+    colB.appendChild(addCohost);
 
     // Reviewer notes + passcode
-    form.appendChild(field("reviewer_notes", "Notes for the reviewer (optional)",
+    colB.appendChild(field("reviewer_notes", "Notes for the reviewer (optional)",
       el("textarea", { name: "reviewer_notes", class: "cnl-ef-input", rows: "3" }),
       "Only CNL staff see this — it won't be published."));
     if (passcodeRequired) {
-      form.appendChild(field("passcode", "Submission passcode",
+      colB.appendChild(field("passcode", "Submission passcode",
         el("input", { type: "password", name: "passcode", class: "cnl-ef-input", autocomplete: "off" }),
         "Provided to chapter leads."));
     }
 
     // Turnstile
     var tsSlot = el("div", { class: "cnl-ef-turnstile" });
-    form.appendChild(tsSlot);
+    colB.appendChild(tsSlot);
 
     var submitBtn = el("button", { type: "submit", class: "cnl-ef-submit", text: "Submit for approval" });
-    form.appendChild(submitBtn);
-    form.appendChild(el("p", { class: "cnl-ef-hint", text: "Submissions are reviewed by CNL staff before the event goes live." }));
+    colB.appendChild(submitBtn);
+    colB.appendChild(el("p", { class: "cnl-ef-hint", text: "Submissions are reviewed by CNL staff before the event goes live." }));
 
     root.innerHTML = "";
     root.appendChild(form);
@@ -306,8 +310,67 @@
         ? "Times are in the chapter's local timezone (" + ch.timezone + ")."
         : "";
     }
-    var chapterSelect = form.querySelector('select[name="chapter_code"]');
-    if (chapterSelect) chapterSelect.addEventListener("change", refreshTzHint);
+    var chSearch = form.querySelector('[name="chapter_search"]');
+    if (chSearch) {
+      var chHidden = form.querySelector('[name="chapter_code"]');
+      var chSugg = form.querySelector('[data-field="chapter_code"] .cnl-ef-suggestions');
+      var chActive = -1;
+      var closeCh = function () {
+        chSugg.style.display = "none";
+        chSugg.innerHTML = "";
+        chActive = -1;
+        chSearch.setAttribute("aria-expanded", "false");
+      };
+      var pickCh = function (c) {
+        chHidden.value = c.code;
+        chSearch.value = c.name;
+        closeCh();
+        setError("chapter_code", "");
+        refreshTzHint();
+      };
+      chSearch.addEventListener("input", function () {
+        chHidden.value = "";
+        refreshTzHint();
+        var q = chSearch.value.trim().toLowerCase();
+        if (!q) { closeCh(); return; }
+        var hits = chapters.filter(function (c) {
+          return c.name.toLowerCase().indexOf(q) >= 0 || c.code.toLowerCase() === q;
+        }).slice(0, 8);
+        chSugg.innerHTML = "";
+        if (!hits.length) { closeCh(); return; }
+        hits.forEach(function (c, idx) {
+          var li = el("li", { class: "cnl-ef-suggestion", role: "option", id: "cnl-ef-ch-" + idx, text: c.name });
+          li.addEventListener("mousedown", function (e) {
+            e.preventDefault();
+            pickCh(c);
+          });
+          chSugg.appendChild(li);
+        });
+        chSugg.style.display = "";
+        chSearch.setAttribute("aria-expanded", "true");
+        chActive = -1;
+      });
+      chSearch.addEventListener("keydown", function (e) {
+        var items = chSugg.querySelectorAll(".cnl-ef-suggestion");
+        if (!items.length) return;
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          e.preventDefault();
+          chActive = e.key === "ArrowDown"
+            ? Math.min(chActive + 1, items.length - 1)
+            : Math.max(chActive - 1, 0);
+          items.forEach(function (li, idx) {
+            li.classList.toggle("cnl-ef-active", idx === chActive);
+          });
+        } else if (e.key === "Enter") {
+          e.preventDefault();
+          if (chActive >= 0) items[chActive].dispatchEvent(new MouseEvent("mousedown"));
+          else if (items.length === 1) items[0].dispatchEvent(new MouseEvent("mousedown"));
+        } else if (e.key === "Escape") {
+          closeCh();
+        }
+      });
+      chSearch.addEventListener("blur", function () { setTimeout(closeCh, 150); });
+    }
     refreshTzHint();
 
     // End date follows the start date until someone edits it deliberately —
@@ -610,7 +673,7 @@
   // ---------- client-side validation (UX pass; the Worker re-checks all of it) ----------
   function clientValidate(ctx) {
     var errors = {};
-    if (!presetChapter && !val("chapter_code")) errors.chapter_code = "Choose your chapter.";
+    if (!presetChapter && !val("chapter_code")) errors.chapter_code = "Start typing and pick your chapter from the list.";
     if (!val("submitter_name")) errors.submitter_name = "Your name is required.";
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(val("submitter_email"))) errors.submitter_email = "Enter a valid email.";
     var name = val("event_name");

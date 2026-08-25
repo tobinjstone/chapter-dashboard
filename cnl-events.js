@@ -30,6 +30,7 @@
     tag: "",
     limit: 0,
     filters: null,          // null = off; "auto" = derive from the feed's tags
+    hideEmptyFilters: true, // drop chips that match no event in the feed
     search: false,
     searchText: "Search chapters or events",
     allText: "All",
@@ -48,6 +49,10 @@
       tag: d.tag || page.tag || DEFAULTS.tag,
       limit: parseInt(d.limit || page.limit || DEFAULTS.limit, 10) || 0,
       filters: page.filters !== undefined ? page.filters : DEFAULTS.filters,
+      hideEmptyFilters:
+        page.hideEmptyFilters !== undefined
+          ? page.hideEmptyFilters
+          : DEFAULTS.hideEmptyFilters,
       search:
         d.search !== undefined ? d.search !== "false" : page.search || DEFAULTS.search,
       searchText: page.searchText || DEFAULTS.searchText,
@@ -333,6 +338,17 @@
 
         var state = { filter: null, q: "" };
         var filters = normalizeFilters(cfg, data.known_tags);
+
+        // A chip that can never match anything looks broken rather than
+        // informative, so drop it. As tags get applied in Luma the chips
+        // reappear on their own.
+        if (cfg.hideEmptyFilters) {
+          filters = filters.filter(function (f) {
+            return data.events.some(function (event) {
+              return matchesFilter(event, f);
+            });
+          });
+        }
         var bar =
           filters.length || cfg.search ? toolbar(cfg, filters, state, draw) : null;
 

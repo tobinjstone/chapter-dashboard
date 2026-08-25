@@ -1,0 +1,246 @@
+/* CNL event intake form. Every selector is scoped under .cnl-event-form and
+   every class is cnl-ef- prefixed: this widget lands in pages whose CSS we
+   don't control, and must neither inherit nor leak. */
+
+.cnl-event-form {
+  --cnl-ef-navy: #2c3659;
+  --cnl-ef-cream: #fdfbe9;
+  --cnl-ef-red: #9f3c39;
+  --cnl-ef-ink: #22293f;
+  --cnl-ef-line: #c9c4a8;
+  font-family: Georgia, "Times New Roman", serif;
+  color: var(--cnl-ef-ink);
+  background: var(--cnl-ef-cream);
+  border: 2px solid var(--cnl-ef-navy);
+  box-shadow: 6px 6px 0 var(--cnl-ef-red);
+  padding: 28px;
+  max-width: 640px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.cnl-event-form *,
+.cnl-event-form *::before,
+.cnl-event-form *::after {
+  box-sizing: border-box;
+}
+
+.cnl-event-form .cnl-ef-section {
+  font-family: Georgia, serif;
+  color: var(--cnl-ef-navy);
+  font-size: 1.2em;
+  margin: 28px 0 6px;
+  padding-bottom: 4px;
+  border-bottom: 2px solid var(--cnl-ef-navy);
+}
+
+.cnl-event-form .cnl-ef-field {
+  margin: 16px 0;
+}
+
+.cnl-event-form .cnl-ef-label {
+  display: block;
+  font-weight: bold;
+  color: var(--cnl-ef-navy);
+  margin-bottom: 4px;
+}
+
+.cnl-event-form .cnl-ef-hint {
+  font-size: 0.85em;
+  color: #5a5f72;
+  margin: 2px 0 6px;
+}
+
+.cnl-event-form .cnl-ef-input {
+  width: 100%;
+  font-family: inherit;
+  font-size: 1em;
+  color: var(--cnl-ef-ink);
+  background: #fff;
+  border: 1px solid var(--cnl-ef-navy);
+  border-radius: 0;
+  padding: 9px 10px;
+}
+
+.cnl-event-form .cnl-ef-input:focus {
+  outline: 3px solid rgba(159, 60, 57, 0.45);
+  outline-offset: 1px;
+}
+
+.cnl-event-form .cnl-ef-file {
+  background: transparent;
+  border: none;
+  padding-left: 0;
+}
+
+.cnl-event-form .cnl-ef-row {
+  display: flex;
+  gap: 14px;
+}
+
+.cnl-event-form .cnl-ef-row .cnl-ef-field {
+  flex: 1;
+}
+
+.cnl-event-form .cnl-ef-radio-row {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.cnl-event-form .cnl-ef-radio,
+.cnl-event-form .cnl-ef-check {
+  font-weight: normal;
+  cursor: pointer;
+}
+
+.cnl-event-form .cnl-ef-check {
+  display: block;
+  margin: 6px 0 2px;
+  font-size: 0.9em;
+}
+
+.cnl-event-form .cnl-ef-inline-error {
+  color: var(--cnl-ef-red);
+  font-size: 0.85em;
+  min-height: 0;
+  margin: 4px 0 0;
+}
+
+.cnl-event-form .cnl-ef-has-error .cnl-ef-input {
+  border-color: var(--cnl-ef-red);
+  border-width: 2px;
+}
+
+.cnl-event-form .cnl-ef-banner,
+.cnl-event-form .cnl-ef-error-banner {
+  background: var(--cnl-ef-red);
+  color: var(--cnl-ef-cream);
+  padding: 10px 14px;
+  margin: 0 0 16px;
+}
+
+.cnl-event-form .cnl-ef-suggestions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--cnl-ef-navy);
+  border-top: none;
+  background: #fff;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.cnl-event-form .cnl-ef-suggestion {
+  padding: 8px 10px;
+  cursor: pointer;
+  font-size: 0.95em;
+}
+
+.cnl-event-form .cnl-ef-suggestion:hover,
+.cnl-event-form .cnl-ef-suggestion.cnl-ef-active {
+  background: var(--cnl-ef-navy);
+  color: var(--cnl-ef-cream);
+}
+
+.cnl-event-form .cnl-ef-picked {
+  background: #fff;
+  border: 1px dashed var(--cnl-ef-navy);
+  padding: 8px 10px;
+  margin: 6px 0 0;
+  font-size: 0.95em;
+}
+
+.cnl-event-form .cnl-ef-linklike {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 0.9em;
+  color: var(--cnl-ef-red);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.cnl-event-form .cnl-ef-cohost {
+  border-left: 3px solid var(--cnl-ef-line);
+  padding-left: 12px;
+  margin: 14px 0;
+}
+
+.cnl-event-form .cnl-ef-crop-canvas {
+  display: block;
+  max-width: 100%;
+  border: 1px solid var(--cnl-ef-navy);
+  cursor: grab;
+}
+
+.cnl-event-form .cnl-ef-crop-canvas:active {
+  cursor: grabbing;
+}
+
+.cnl-event-form .cnl-ef-turnstile {
+  margin: 18px 0 0;
+}
+
+.cnl-event-form .cnl-ef-submit {
+  display: block;
+  width: 100%;
+  margin-top: 22px;
+  padding: 13px;
+  font-family: Georgia, serif;
+  font-size: 1.05em;
+  font-weight: bold;
+  color: var(--cnl-ef-cream);
+  background: var(--cnl-ef-navy);
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.cnl-event-form .cnl-ef-submit:hover:not(:disabled) {
+  background: var(--cnl-ef-red);
+}
+
+.cnl-event-form .cnl-ef-submit:disabled {
+  background: #8a8fa3;
+  cursor: wait;
+}
+
+.cnl-event-form .cnl-ef-busy .cnl-ef-input,
+.cnl-event-form .cnl-ef-busy .cnl-ef-linklike {
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+.cnl-event-form .cnl-ef-success {
+  text-align: center;
+  padding: 30px 10px;
+}
+
+.cnl-event-form .cnl-ef-success h3 {
+  color: var(--cnl-ef-navy);
+  font-size: 1.5em;
+  margin: 0 0 10px;
+}
+
+/* Honeypot: pulled out of the visual and accessibility flow WITHOUT
+   display:none, so autofill bots still see a fillable text input. */
+.cnl-event-form .cnl-ef-hp {
+  position: absolute !important;
+  left: -9999px !important;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+@media (max-width: 480px) {
+  .cnl-event-form {
+    padding: 18px;
+  }
+  .cnl-event-form .cnl-ef-row {
+    flex-direction: column;
+    gap: 0;
+  }
+}

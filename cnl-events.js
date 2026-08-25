@@ -27,7 +27,13 @@
   var DEFAULTS = {
     endpoint: "https://cnl-events.tobin-dc4.workers.dev/events",
     chapter: "",
+    tag: "",
     limit: 0,
+    filters: null,          // null = off; "auto" = derive from the feed's tags
+    search: false,
+    searchText: "Search chapters or events",
+    allText: "All",
+    noMatchText: "No events match that filter.",
     emptyText: "No upcoming events right now. Check back soon.",
     errorText: "Events couldn't load right now.",
     calendarUrl: "",
@@ -39,7 +45,14 @@
     return {
       endpoint: d.endpoint || page.endpoint || DEFAULTS.endpoint,
       chapter: d.chapter || page.chapter || DEFAULTS.chapter,
+      tag: d.tag || page.tag || DEFAULTS.tag,
       limit: parseInt(d.limit || page.limit || DEFAULTS.limit, 10) || 0,
+      filters: page.filters !== undefined ? page.filters : DEFAULTS.filters,
+      search:
+        d.search !== undefined ? d.search !== "false" : page.search || DEFAULTS.search,
+      searchText: page.searchText || DEFAULTS.searchText,
+      allText: page.allText || DEFAULTS.allText,
+      noMatchText: page.noMatchText || DEFAULTS.noMatchText,
       emptyText: d.emptyText || page.emptyText || DEFAULTS.emptyText,
       errorText: page.errorText || DEFAULTS.errorText,
       calendarUrl: d.calendarUrl || page.calendarUrl || DEFAULTS.calendarUrl,
@@ -154,7 +167,10 @@
   }
 
   function message(container, text, cfg) {
-    container.replaceChildren();
+    container.replaceChildren(messageNode(cfg, text));
+  }
+
+  function messageNode(cfg, text) {
     var box = el("div", "cnl-events__message", text);
     if (cfg.calendarUrl) {
       box.appendChild(document.createTextNode(" "));
@@ -164,12 +180,125 @@
       link.rel = "noopener";
       box.appendChild(link);
     }
-    container.appendChild(box);
+    return box;
   }
 
   function skeleton(container, n) {
     container.replaceChildren();
     for (var i = 0; i < n; i++) container.appendChild(el("div", "cnl-skeleton"));
+  }
+
+  // --- filtering -----------------------------------------------------------
+
+  // A filter is a plain string (matched against the event's topic tags), or an
+  // object: {label, tag} for a tag match, or {label, is} for a built-in
+  // predicate. Built-ins need nothing tagged in Luma.
+  var PREDICATES = {
+    virtual: function (e) {
+      return (e.location || {}).type === "online";
+    },
+    inperson: function (e) {
+      return (e.location || {}).type !== "online";
+    },
+    chapter: function (e) {
+      return (e.chapters || []).length > 0;
+    },
+    national: function (e) {
+      return (e.chapters || []).length === 0;
+    },
+  };
+
+  function normalizeFilters(cfg, knownTags) {
+    var raw = cfg.filters;
+    if (!raw) return [];
+    if (raw === "auto") raw = knownTags || [];
+    if (!isArray(raw)) return [];
+    return raw
+      .map(function (f) {
+        if (typeof f === "string") return { label: f, tag: f };
+        return f && f.label ? f : null;
+      })
+      .filter(Boolean)
+      .filter(function (f) {
+        // Drop an unknown built-in rather than rendering a chip that does nothing.
+        if (!f.is) return true;
+        if (PREDICATES[String(f.is).toLowerCase()]) return true;
+        console.warn('[cnl-events] unknown filter predicate "' + f.is + '"');
+        return false;
+      });
+  }
+
+  function isArray(v) {
+    return Object.prototype.toString.call(v) === "[object Array]";
+  }
+
+  function matchesFilter(event, f) {
+    if (!f) return true;
+    if (f.is) return PREDICATES[String(f.is).toLowerCase()](event);
+    var want = String(f.tag || f.label).toLowerCase();
+    return (event.tags || []).some(function (t) {
+      return t.toLowerCase() === want;
+    });
+  }
+
+  function matchesSearch(event, q) {
+    if (!q) return true;
+    var loc = event.location || {};
+    var hay = [event.name]
+      .concat(event.chapters || [], event.chapter_names || [], event.tags || [])
+      .concat([loc.city_state, loc.venue])
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return hay.indexOf(q) !== -1;
+  }
+
+  var uid = 0;
+
+  function toolbar(cfg, filters, state, onChange) {
+    var bar = el("div", "cnl-events__bar");
+
+    if (filters.length) {
+      var group = el("div", "cnl-events__filters");
+      group.setAttribute("role", "group");
+      group.setAttribute("aria-label", "Filter events");
+
+      [{ label: cfg.allText, all: true }].concat(filters).forEach(function (f, i) {
+        var b = el("button", "cnl-events__filter", f.label);
+        b.type = "button";
+        b.setAttribute("aria-pressed", i === 0 ? "true" : "false");
+        b.addEventListener("click", function () {
+          state.filter = f.all ? null : f;
+          for (var j = 0; j < group.children.length; j++) {
+            group.children[j].setAttribute("aria-pressed", j === i ? "true" : "false");
+          }
+          onChange();
+        });
+        group.appendChild(b);
+      });
+      bar.appendChild(group);
+    }
+
+    if (cfg.search) {
+      uid++;
+      var id = "cnl-events-search-" + uid;
+      var wrap = el("div", "cnl-events__search");
+      var lab = el("label", "cnl-events__search-label", cfg.searchText);
+      lab.setAttribute("for", id);
+      var input = el("input", "cnl-events__input");
+      input.type = "search";
+      input.id = id;
+      input.placeholder = cfg.searchText;
+      input.addEventListener("input", function () {
+        state.q = input.value.trim().toLowerCase();
+        onChange();
+      });
+      wrap.appendChild(lab);
+      wrap.appendChild(input);
+      bar.appendChild(wrap);
+    }
+
+    return bar;
   }
 
   function render(container) {
@@ -180,6 +309,7 @@
 
     var url = new URL(cfg.endpoint);
     if (cfg.chapter) url.searchParams.set("chapter", cfg.chapter);
+    if (cfg.tag) url.searchParams.set("tag", cfg.tag);
     if (cfg.limit) url.searchParams.set("limit", String(cfg.limit));
 
     fetch(url.toString(), { credentials: "omit" })
@@ -201,11 +331,39 @@
           return;
         }
 
-        var frag = document.createDocumentFragment();
-        data.events.forEach(function (event) {
-          frag.appendChild(card(event));
-        });
-        container.replaceChildren(frag);
+        var state = { filter: null, q: "" };
+        var filters = normalizeFilters(cfg, data.known_tags);
+        var bar =
+          filters.length || cfg.search ? toolbar(cfg, filters, state, draw) : null;
+
+        // The container is the grid, so the toolbar is a full-width grid item
+        // rather than a wrapper. Redrawing removes the cards and leaves it in
+        // place, which keeps focus and the typed query intact.
+        function draw() {
+          var kids = [].slice.call(container.children);
+          for (var i = 0; i < kids.length; i++) {
+            if (kids[i] !== bar) container.removeChild(kids[i]);
+          }
+
+          var shown = data.events.filter(function (event) {
+            return matchesFilter(event, state.filter) && matchesSearch(event, state.q);
+          });
+
+          if (!shown.length) {
+            container.appendChild(messageNode(cfg, cfg.noMatchText));
+            return;
+          }
+
+          var frag = document.createDocumentFragment();
+          shown.forEach(function (event) {
+            frag.appendChild(card(event));
+          });
+          container.appendChild(frag);
+        }
+
+        container.replaceChildren();
+        if (bar) container.appendChild(bar);
+        draw();
       })
       .catch(function (err) {
         container.setAttribute("aria-busy", "false");

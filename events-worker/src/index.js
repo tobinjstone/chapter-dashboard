@@ -8,6 +8,7 @@
  *   GET /events                    all upcoming events
  *   GET /events?chapter=ATL        only events tagged for that chapter
  *   GET /events?limit=6            cap the number returned
+ *   GET /events?format=json        Squarespace-style feed for r/neoliberal's DT bot
  *   GET /events?debug=1            include Luma's raw first entry (see DEBUG_TOKEN)
  *   GET /health                    liveness check, no Luma call
  *
@@ -28,8 +29,16 @@ const ALLOWED_ORIGINS = [
   "https://www.cnliberalism.org",
 ];
 
-// Squarespace preview/staging domains, so you can test before publishing.
-const ALLOWED_ORIGIN_SUFFIXES = [".squarespace.com"];
+// Squarespace preview/staging domains, plus any cnliberalism.org subdomain, so
+// embeds on microsites and campaign subdomains work without a redeploy.
+const ALLOWED_ORIGIN_SUFFIXES = [".squarespace.com", ".cnliberalism.org"];
+
+// Flip to true to serve any origin. The feed only ever returns event data that
+// is already public on luma.com, and the Origin check below is not a security
+// control (it is trivially spoofed) - it only stops other people's sites from
+// casually embedding the feed. Set this if embeds land on domains that are not
+// cnliberalism.org subdomains.
+const ALLOW_ANY_ORIGIN = false;
 
 // Chapter pages identify themselves by airport-style ChapterCode (DEN), but the
 // Luma tags are human-readable (Denver) because they show in Luma's public
@@ -185,6 +194,16 @@ const CHAPTER_FULL_NAMES = {
   "zimbabwe"         : "Zimbabwe New Liberals",
 };
 
+// Luma has one flat tag namespace. Anything matching the chapter roster is a
+// chapter; everything else ("Week of Action", "National") is a topic tag the
+// filter bar can use. Without this split a topic tag would show in the chapter
+// chip and match ?chapter=.
+const CHAPTER_TAG_SET = new Set(Object.keys(CHAPTER_FULL_NAMES));
+
+function isChapterTag(name) {
+  return CHAPTER_TAG_SET.has(String(name).trim().toLowerCase());
+}
+
 function resolveChapter(raw) {
   const trimmed = raw.trim();
   if (!trimmed) return "";
@@ -209,7 +228,11 @@ function corsHeaders(origin) {
   // real reason this endpoint is safe to expose is that it only ever returns
   // event data that is already public on luma.com.
   return {
-    "Access-Control-Allow-Origin": isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS[0],
+    "Access-Control-Allow-Origin": ALLOW_ANY_ORIGIN
+      ? "*"
+      : isAllowedOrigin(origin)
+        ? origin
+        : ALLOWED_ORIGINS[0],
     "Access-Control-Allow-Methods": "GET, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Max-Age": "86400",
@@ -248,6 +271,12 @@ export default {
 
     const chapterRaw = (url.searchParams.get("chapter") || "").trim();
     const chapter = resolveChapter(chapterRaw);
+    // Topic tag, for embeds that show one strand of programming rather than
+    // one chapter. Comma-separated values are OR-ed.
+    const tagParam = (url.searchParams.get("tag") || "")
+      .split(",")
+      .map((t) => t.trim().toLowerCase())
+      .filter(Boolean);
     const limit = Math.min(parseInt(url.searchParams.get("limit") || "0", 10) || 0, 200);
 
     let debug = url.searchParams.get("debug") === "1";
@@ -331,7 +360,51 @@ export default {
       }
     }
 
+    if (tagParam.length) {
+      const before = events.length;
+      events = events.filter((e) =>
+        (e.tags || []).some((t) => tagParam.indexOf(t.toLowerCase()) !== -1)
+      );
+      const known = payload.known_tags || [];
+      const unknown = tagParam.filter(
+        (t) => !known.some((k) => k.toLowerCase() === t)
+      );
+      if (!events.length && before && unknown.length) {
+        // Same trap as chapters: a misspelled tag looks exactly like a tag with
+        // nothing scheduled. Say which ones matched nothing.
+        warnings.push(
+          `Tag(s) not found on any upcoming event: ${unknown.join(", ")}. ` +
+            `Tags currently in use: ${known.length ? known.join(", ") : "(none)"}.`
+        );
+      }
+    }
+
     if (limit) events = events.slice(0, limit);
+
+    // r/neoliberal's discussion-thread bot used to read Squarespace's
+    // /events?format=json feed, so this view keeps its shape: an `upcoming`
+    // array with `title` and `startDate`/`endDate` in epoch milliseconds.
+    // `url` is the absolute Luma link — the old feed's relative `fullUrl`
+    // (which the bot prefixed with cnliberalism.org) has no equivalent here,
+    // since events no longer have per-event pages on cnliberalism.org.
+    if (url.searchParams.get("format") === "json") {
+      return json(
+        {
+          upcoming: events.map((e) => ({
+            title: e.name,
+            startDate: Date.parse(e.start_at),
+            endDate: e.end_at ? Date.parse(e.end_at) : null,
+            url: e.url,
+            timezone: e.timezone,
+            chapters: e.chapter_names,
+            location: e.location,
+          })),
+          count: events.length,
+          generated_at: payload.generated_at,
+        },
+        { origin }
+      );
+    }
 
     return json(
       {
@@ -340,6 +413,7 @@ export default {
         served,
         generated_at: payload.generated_at,
         known_chapters: payload.known_chapters || [],
+        known_tags: payload.known_tags || [],
         ...(warnings.length ? { warnings } : {}),
         ...(debug ? { raw_sample: payload.raw_sample } : {}),
       },
@@ -356,6 +430,7 @@ async function fetchAllEvents(apiKey, debug) {
   let rawSample = null;
   let anyTags = false;
   const knownChapters = new Set();
+  const knownTags = new Set();
 
   for (let page = 0; page < MAX_PAGES; page++) {
     const qs = new URLSearchParams();
@@ -386,6 +461,7 @@ async function fetchAllEvents(apiKey, debug) {
       if (!normalized) continue;
       if (normalized.chapters.length) anyTags = true;
       for (const c of normalized.chapters) knownChapters.add(c);
+      for (const t of normalized.tags) knownTags.add(t);
       events.push(normalized);
     }
 
@@ -400,6 +476,7 @@ async function fetchAllEvents(apiKey, debug) {
     events,
     anyTags,
     known_chapters: [...knownChapters].sort(),
+    known_tags: [...knownTags].sort(),
     generated_at: new Date().toISOString(),
     ...(rawSample ? { raw_sample: rawSample } : {}),
   };
@@ -412,11 +489,14 @@ function normalizeEvent(entry) {
 
   const geo = e.geo_address_info || e.geo_address_json || {};
 
-  // Chapter tags may arrive on the entry or the event, as objects or strings.
+  // Tags may arrive on the entry or the event, as objects or strings.
   const rawTags = entry.tags || e.tags || entry.event_tags || [];
-  const chapters = rawTags
+  const tagNames = rawTags
     .map((t) => (typeof t === "string" ? t : t.name || t.slug || ""))
     .filter(Boolean);
+
+  const chapters = tagNames.filter(isChapterTag);
+  const topics = tagNames.filter((t) => !isChapterTag(t));
 
   const slug = e.url || e.slug || "";
   const eventUrl = slug.startsWith("http") ? slug : `https://luma.com/${slug}`;
@@ -435,6 +515,7 @@ function normalizeEvent(entry) {
     cover_url: e.cover_url || null,
     chapters,
     chapter_names: chapterNames,
+    tags: topics,
     location: {
       type: isOnline ? "online" : "offline",
       venue: geo.address || geo.name || null,

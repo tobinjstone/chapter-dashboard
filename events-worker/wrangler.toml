@@ -5,6 +5,12 @@ compatibility_date = "2026-08-24"
 # Deploys to https://cnl-events.<your-subdomain>.workers.dev
 workers_dev = true
 
+# Custom domain — Cloudflare creates the DNS record on deploy.
+# workers.dev stays enabled until callers are migrated.
+routes = [
+  { pattern = "luma.cnlhq.org", custom_domain = true }
+]
+
 # Secrets are NOT set here. Run these once after the first deploy:
 #   npx wrangler secret put LUMA_API_KEY
 #   npx wrangler secret put DEBUG_TOKEN     (optional)

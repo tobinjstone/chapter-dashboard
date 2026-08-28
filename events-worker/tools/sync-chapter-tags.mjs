@@ -36,7 +36,7 @@ const CHAPTERS = [
   "Cleveland",
   "Columbus",
   "Dallas",
-  "DC",
+  "DMV",
   "Denver",
   "Des Moines",
   "Detroit",

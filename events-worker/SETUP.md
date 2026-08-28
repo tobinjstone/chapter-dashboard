@@ -73,7 +73,7 @@ To force a refresh during testing, redeploy — it clears the cache.
 
 ## 4. Host the widget files
 
-Put `widget/cnl-events.js` and `widget/cnl-events.css` in your
+Put `widget/cnl-events.js` and `widget/cnl-events-widget.css` in your
 `tobinjstone/chapter-dashboard` repo alongside the existing assets, then serve
 them the same way you already do.
 
@@ -96,7 +96,7 @@ National events page — add a Code Block:
 
 ```html
 <link rel="stylesheet"
-      href="https://cdn.jsdelivr.net/gh/tobinjstone/chapter-dashboard@v1.0.0/cnl-events.css">
+      href="https://cdn.jsdelivr.net/gh/tobinjstone/chapter-dashboard@v1.0.0/cnl-events-widget.css">
 
 <div data-cnl-events></div>
 
@@ -126,7 +126,7 @@ rather than hardcoding:
 
 ## 6. Branding
 
-Everything lives in the token block at the top of `cnl-events.css`. The defaults
+Everything lives in the token block at the top of `cnl-events-widget.css`. The defaults
 carry over from your email design — navy `#2C3659`, red `#9F3C39`, cream
 `#FDFBE9`, Georgia display — including the offset-border card treatment
 (navy rule with a red offset), so the calendar reads as the same family as the

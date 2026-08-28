@@ -186,7 +186,7 @@
       el("input", { type: "text", name: "submitter_name", class: "cnl-ef-input", autocomplete: "name", required: "" })));
     colA.appendChild(field("submitter_email", "Your email",
       el("input", { type: "email", name: "submitter_email", class: "cnl-ef-input", autocomplete: "email", required: "" }),
-      "You'll be added as a host and can manage the event in Luma."));
+      "You'll be added as a host and can manage the event in Luma. We strongly recommend submitting from your chapter email address, then adding your personal email as a co-host below so you can still access the event if chapter leadership changes."));
 
     // Event basics
     colA.appendChild(el("h3", { class: "cnl-ef-section", text: "The event" }));

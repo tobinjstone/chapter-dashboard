@@ -1,5 +1,6 @@
 /**
- * CNL Events widget
+ * CNL Events widget (stylesheet: cnl-events-widget.css — renamed so its
+ * .cnl-event classes are never confused with chapter.css's)
  *
  * Renders upcoming Luma events into any element carrying [data-cnl-events].
  * No dependencies. Safe to load twice.

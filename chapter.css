@@ -50,7 +50,7 @@
 .cnl-meta div{font-family:var(--disp);font-stretch:125%;font-weight:700;font-size:12px;letter-spacing:.12em;text-transform:uppercase}
 .cnl-meta i{margin-right:8px;color:var(--acc-text)}
 .cnl-meta .is-dim{opacity:.65}
-.cnl-meta-right{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.cnl-meta-right{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-left:auto}   /* stays right when there's no meeting line */
 @media (max-width:640px){.cnl-meta-note{display:none}}
 
 /* ============ main grid ============ */

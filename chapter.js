@@ -156,9 +156,8 @@
           (c.tagline ? '<p class="cnl-tagline">' + esc(c.tagline) + '</p>' : '<div class="cnl-tagline-spacer"></div>') +
           '<div class="cnl-rule"></div><div class="cnl-rule-thin"></div>' +
           '<div class="cnl-meta">' +
-            (c.meeting
-              ? '<div><i class="fa-regular fa-calendar"></i>Meets ' + esc(c.meeting) + '</div>'
-              : '<div><i class="fa-regular fa-calendar"></i>Meetups every month</div>') +
+            /* Meeting cadence is opt-in: only shown when the registry has one. */
+            (c.meeting ? '<div><i class="fa-regular fa-calendar"></i>Meets ' + esc(c.meeting) + '</div>' : '') +
             '<div class="cnl-meta-right">' +
               '<div class="is-dim cnl-meta-note">Free to join · Everyone welcome</div>' +
               (social ? '<div class="cnl-social">' + social + '</div>' : '') +

@@ -23,7 +23,7 @@ by `ChapterCode`. Every column below is read with `row['<Column>']`, trimmed.
 | `Accent` | one of `brick` `marine` `harvest` `plum` `slate` | Accent color (kicker, drop cap, day numbers, section tag, meta icons, form shadow, submit, input focus, checkbox). Empty/unknown → brick. |
 | `Tagline` | ≤ 60 chars | Italic line under the chapter name |
 | `About` | ≤ 280 chars | Lead paragraph with drop cap |
-| `Meeting` | ≤ 60 chars | "MEETS …" in the masthead meta row (empty → "Meetups every month") |
+| `Meeting` | ≤ 120 chars | Optional "MEETS …" line in the masthead meta row; hidden when empty |
 | `PhotoURL` | landscape image URL | Framed photo card with brick offset shadow |
 | `PhotoCaption` | short | Italic caption under the photo |
 | `Link1Label` / `Link1URL` … `Link4Label` / `Link4URL` | ≤ 4 links | "Chapter links" pill buttons (a link needs both label and URL) |

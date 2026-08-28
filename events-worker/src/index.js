@@ -31,7 +31,9 @@ const ALLOWED_ORIGINS = [
 
 // Squarespace preview/staging domains, plus any cnliberalism.org subdomain, so
 // embeds on microsites and campaign subdomains work without a redeploy.
-const ALLOWED_ORIGIN_SUFFIXES = [".squarespace.com", ".cnliberalism.org"];
+// .cnlhq.org: the chapter page editor on tools.cnlhq.org renders the live page
+// (and its events) in its preview; .pages.dev covers that site's preview URLs.
+const ALLOWED_ORIGIN_SUFFIXES = [".squarespace.com", ".cnliberalism.org", ".cnlhq.org", ".pages.dev"];
 
 // Flip to true to serve any origin. The feed only ever returns event data that
 // is already public on luma.com, and the Origin check below is not a security

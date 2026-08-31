@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CNL chapter embed blocks</title>
+<style>
+  :root {
+    --cream: #FDFBE9; --navy: #2C3659; --brick: #9F3C39; --ink: #131a33;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--cream); color: var(--ink);
+    font: 15px/1.5 system-ui, -apple-system, sans-serif;
+  }
+  header {
+    background: var(--navy); color: var(--cream); padding: 18px 28px;
+    display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
+  }
+  header h1 { margin: 0; font-size: 19px; letter-spacing: .02em; text-transform: uppercase; }
+  header .progress { font-size: 14px; opacity: .85; }
+  main {
+    display: grid; grid-template-columns: 330px 1fr; gap: 24px;
+    padding: 24px 28px; max-width: 1200px; margin: 0 auto;
+  }
+  @media (max-width: 800px) { main { grid-template-columns: 1fr; } }
+
+  .list-panel { min-width: 0; }
+  #filter {
+    width: 100%; padding: 10px 12px; font: inherit; margin-bottom: 10px;
+    border: 2px solid var(--navy); border-radius: 6px; background: #fff;
+  }
+  #chapters {
+    list-style: none; margin: 0; padding: 0; border: 2px solid var(--navy);
+    border-radius: 8px; background: #fff; max-height: 70vh; overflow-y: auto;
+  }
+  #chapters li {
+    display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+    border-bottom: 1px solid #e5e0c8; cursor: pointer;
+  }
+  #chapters li:last-child { border-bottom: 0; }
+  #chapters li:hover { background: #f6f2dc; }
+  #chapters li.selected { background: var(--navy); color: var(--cream); }
+  #chapters li.done .name { text-decoration: line-through; opacity: .55; }
+  #chapters .code {
+    font: 700 12px/1 ui-monospace, Consolas, monospace; background: #e5e0c8;
+    color: var(--ink); border-radius: 4px; padding: 4px 6px; min-width: 40px; text-align: center;
+  }
+  #chapters li.selected .code { background: var(--cream); }
+  #chapters .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #chapters input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--brick); flex: none; }
+
+  .block-panel { min-width: 0; }
+  .block-head { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; flex-wrap: wrap; }
+  .block-head h2 { margin: 0; font-size: 17px; }
+  button {
+    font: 700 14px/1 system-ui, sans-serif; letter-spacing: .03em; text-transform: uppercase;
+    background: var(--brick); color: var(--cream); border: 0; border-radius: 6px;
+    padding: 11px 18px; cursor: pointer;
+  }
+  button:hover { background: #863230; }
+  button.copied { background: #2E6E63; }
+  #code {
+    width: 100%; height: 420px; font: 13px/1.55 ui-monospace, Consolas, monospace;
+    background: var(--ink); color: #e9e6d0; border: 0; border-radius: 8px;
+    padding: 16px; resize: vertical; white-space: pre; overflow: auto;
+  }
+  .hint { font-size: 13px; opacity: .7; margin-top: 8px; }
+  #source-note { font-size: 12px; opacity: .6; margin-top: 6px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Chapter embed blocks</h1>
+  <span class="progress" id="progress"></span>
+</header>
+
+<main>
+  <div class="list-panel">
+    <input id="filter" type="search" placeholder="Filter chapters…" autocomplete="off">
+    <ul id="chapters"></ul>
+    <div id="source-note"></div>
+  </div>
+
+  <div class="block-panel">
+    <div class="block-head">
+      <h2 id="block-title">Pick a chapter</h2>
+      <button id="copy" hidden>Copy block</button>
+    </div>
+    <textarea id="code" readonly spellcheck="false" placeholder="Select a chapter on the left, then copy its code block into that page's Squarespace code block."></textarea>
+    <p class="hint">Paste into a <strong>Code</strong> block on the chapter's Squarespace page.
+      Tick the checkbox once a page is done — progress is remembered in this browser.</p>
+  </div>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  // Same published registry sheet chapter.js reads (CSV_URL in chapter.js).
+  var CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0wq0Bm6gQrgX_Th252L2h9B1GzPQS_SeWg-_JrNi6ynm7CHGcuLw-RjmWC4M5Yg-KMXjvNN0d8ZVe/pub?gid=0&single=true&output=csv';
+
+  /* Fallback list = cnl-signup-worker chapters.ts as of 2026-08-31.
+     The live registry sheet is tried first, so new chapters appear
+     automatically; this only covers offline/CSV-fetch failures. */
+  var FALLBACK = [
+    ['AMS','Amsterdam New Liberals'],['ARN','Stockholm New Liberals'],['ATL','Atlanta New Liberals'],
+    ['AUS','Austin New Liberals'],['BAA','Neoliberales Buenos Aires'],['BDL','Hartford New Liberals'],
+    ['BER','Berlin New Liberals'],['BNA','Nashville New Liberals'],['BOS','Boston New Liberals'],
+    ['BRU','Brussels New Liberals'],['BWI','Baltimore New Liberals'],['CAL','Calgary New Liberals'],
+    ['CHI','Chicago New Liberals'],['CHO','Charlottesville New Liberals'],['CLT','Charlotte New Liberals'],
+    ['CLV','Cleveland New Liberals'],['CMH','Columbus New Liberals'],['CVG','Cincinnati New Liberals'],
+    ['DAC','Dhaka New Liberals'],['DAL','Dallas New Liberals'],['DCA','DMV New Libs'],
+    ['DEN','Denver New Liberals'],['DSM','Des Moines New Liberals'],['DTW','Detroit New Liberals'],
+    ['DUB','Dublin New Liberals'],['EWR','Jersey City New Liberals'],['FIH','DRC New Liberals'],
+    ['GBE','Botswana New Liberals'],['HOU','Houston New Liberals'],['HRE','Zimbabwe New Liberals'],
+    ['HSV','Advance Huntsville'],['IND','Indianapolis New Liberals'],['JNB','Johannesburg New Liberals'],
+    ['KCM','Kansas City New Liberals'],['LAX','Los Angeles New Liberals'],['LEX','Lexington New Liberals'],
+    ['LON','London New Liberals'],['MCO','Orlando New Liberals'],['MEL','Melbourne New Progressives'],
+    ['MIA','Miami New Liberals'],['MKE','Milwaukee New Liberals'],['MNH','Manchester New Liberals'],
+    ['MSP','Twin Cities New Liberals'],['MSY','New Orleans New Liberals'],['NBO','Kenya New Liberals'],
+    ['NYC','NYC New Liberals'],['OMA','Omaha New Liberals'],['PDX','Portland New Liberals'],
+    ['PHL','Philly New Liberals'],['PHX','Phoenix New Liberals'],['PIT','Pittsburgh New Liberals'],
+    ['PVD','Providence New Liberals'],['RDU','Raleigh-Durham New Liberals'],['RVA','Richmond Neoliberals'],
+    ['SAN','San Diego New Liberals'],['SAT','San Antonio New Liberals'],['SEA','Seattle New Liberals'],
+    ['SFO','Bay Area New Liberals'],['SJC','Santa Cruz New Liberals'],['SJU','Puerto Rico New Liberals'],
+    ['SLC','Salt Lake City New Liberals'],['STL','St. Louis New Liberals'],['TCL','UofA New Liberals'],
+    ['TOR','Toronto New Liberals'],['TPE','Taipei New Liberals'],['UOX','Ole Miss New Liberals'],
+    ['WAW','Warsaw New Liberals'],['YOW','Ottawa New Liberals'],['YVR','Vancouver New Liberals']
+  ];
+
+  function blockFor(code) {
+    return [
+      '<!-- CNL chapter page — ' + code + ' -->',
+      '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">',
+      '<link rel="stylesheet" href="https://use.typekit.net/kxb6xor.css">',
+      '<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"><\/script>',
+      '<script src="https://cdnjs.cloudflare.com/ajax/libs/date-fns/2.30.0/index.min.js"><\/script>',
+      '<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/tobinjstone/chapter-dashboard@main/chapter.css">',
+      '<script src="https://cdn.jsdelivr.net/gh/tobinjstone/chapter-dashboard@main/chapter.js" defer><\/script>',
+      '<script>',
+      '  window.CNL_SETTINGS = { chapterCode: "' + code + '" };',
+      '<\/script>',
+      '<div id="cnl-chapter"></div>'
+    ].join('\n');
+  }
+
+  /* Minimal quote-aware CSV parse — enough for the registry sheet. */
+  function parseCsv(text) {
+    var rows = [], row = [], cell = '', inQ = false;
+    for (var i = 0; i < text.length; i++) {
+      var ch = text[i];
+      if (inQ) {
+        if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else inQ = false; }
+        else cell += ch;
+      } else if (ch === '"') inQ = true;
+      else if (ch === ',') { row.push(cell); cell = ''; }
+      else if (ch === '\n' || ch === '\r') {
+        if (ch === '\r' && text[i + 1] === '\n') i++;
+        row.push(cell); cell = '';
+        if (row.length > 1 || row[0] !== '') rows.push(row);
+        row = [];
+      } else cell += ch;
+    }
+    if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+    return rows;
+  }
+
+  var DONE_KEY = 'cnl-embed-done';
+  function loadDone() {
+    try { return JSON.parse(localStorage.getItem(DONE_KEY)) || {}; } catch (e) { return {}; }
+  }
+  function saveDone(d) {
+    try { localStorage.setItem(DONE_KEY, JSON.stringify(d)); } catch (e) {}
+  }
+
+  var chapters = [], done = loadDone(), selected = null;
+  var $list = document.getElementById('chapters');
+  var $filter = document.getElementById('filter');
+  var $code = document.getElementById('code');
+  var $copy = document.getElementById('copy');
+  var $title = document.getElementById('block-title');
+  var $progress = document.getElementById('progress');
+  var $source = document.getElementById('source-note');
+
+  function renderProgress() {
+    var n = chapters.filter(function (c) { return done[c.code]; }).length;
+    $progress.textContent = n + ' / ' + chapters.length + ' pages done';
+  }
+
+  function select(c) {
+    selected = c;
+    $title.textContent = c.code + ' — ' + c.name;
+    $code.value = blockFor(c.code);
+    $copy.hidden = false;
+    $copy.textContent = 'Copy block';
+    $copy.classList.remove('copied');
+    render();
+  }
+
+  function render() {
+    var q = $filter.value.trim().toLowerCase();
+    $list.innerHTML = '';
+    chapters.forEach(function (c) {
+      if (q && (c.code + ' ' + c.name).toLowerCase().indexOf(q) < 0) return;
+      var li = document.createElement('li');
+      li.className = (done[c.code] ? 'done' : '') + (selected && selected.code === c.code ? ' selected' : '');
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = !!done[c.code];
+      cb.title = 'Mark page as done';
+      cb.addEventListener('click', function (e) {
+        e.stopPropagation();
+        done[c.code] = cb.checked;
+        if (!cb.checked) delete done[c.code];
+        saveDone(done); render(); renderProgress();
+      });
+      var code = document.createElement('span'); code.className = 'code'; code.textContent = c.code;
+      var name = document.createElement('span'); name.className = 'name'; name.textContent = c.name;
+      li.appendChild(cb); li.appendChild(code); li.appendChild(name);
+      li.addEventListener('click', function () { select(c); });
+      $list.appendChild(li);
+    });
+  }
+
+  $filter.addEventListener('input', render);
+
+  $copy.addEventListener('click', function () {
+    $code.select();
+    var ok = false;
+    function flash(success) {
+      $copy.textContent = success ? 'Copied ✓' : 'Copy failed — select & copy manually';
+      $copy.classList.toggle('copied', success);
+      setTimeout(function () {
+        $copy.textContent = 'Copy block'; $copy.classList.remove('copied');
+      }, 1600);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText($code.value).then(function () { flash(true); },
+        function () { try { ok = document.execCommand('copy'); } catch (e) {} flash(ok); });
+    } else {
+      try { ok = document.execCommand('copy'); } catch (e) {}
+      flash(ok);
+    }
+  });
+
+  function useList(list, sourceLabel) {
+    chapters = list.slice().sort(function (a, b) { return a.name.localeCompare(b.name); });
+    $source.textContent = 'Chapter list: ' + sourceLabel;
+    render(); renderProgress();
+  }
+
+  useList(FALLBACK.map(function (r) { return { code: r[0], name: r[1] }; }), 'built-in (loading live registry…)');
+
+  fetch(CSV_URL).then(function (r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.text();
+  }).then(function (text) {
+    var rows = parseCsv(text);
+    if (!rows.length) throw new Error('empty CSV');
+    var head = rows[0].map(function (h) { return h.trim(); });
+    var iCode = head.indexOf('ChapterCode'), iName = head.indexOf('ChapterName');
+    if (iCode < 0 || iName < 0) throw new Error('missing columns');
+    var list = rows.slice(1).map(function (r) {
+      return { code: (r[iCode] || '').trim(), name: (r[iName] || '').trim() };
+    }).filter(function (c) { return c.code && c.name; });
+    if (!list.length) throw new Error('no chapters');
+    useList(list, 'live registry sheet (' + list.length + ' chapters)');
+  }).catch(function (e) {
+    $source.textContent = 'Chapter list: built-in fallback (registry fetch failed: ' + e.message + ')';
+  });
+})();
+</script>
+</body>
+</html>

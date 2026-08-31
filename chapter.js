@@ -298,7 +298,7 @@
         heading: '',
         subheading: '',
         showNames: true,
-        showLastName: false,   /* chapter AN forms: first name, email, mobile, ZIP */
+        showLastName: true,    /* chapter AN forms: first + last name, email, mobile, ZIP */
         showPhone: true,
         showZip: true,
         buttonLabel: 'Join the chapter',

@@ -1751,7 +1751,7 @@
     CANVAS_OPTIONS.forEach(function (c) {
       var sw = el("span", { "aria-hidden": "true", style: "display:inline-block;width:18px;height:18px;border-radius:50%;border:1px solid rgba(0,0,0,0.25);background:" + c[2] });
       var b = el("button", { type: "button", "data-canvas": c[0], title: c[1] + " · " + c[2],
-        style: "display:inline-flex;align-items:center;gap:6px;margin:0 8px 8px 0;padding:5px 10px;border:2px solid #d5d5d5;border-radius:999px;background:#fff;cursor:pointer;font-size:12px;line-height:1;" },
+        style: "display:inline-flex;align-items:center;gap:6px;margin:0 8px 8px 0;padding:5px 10px;border:2px solid #d5d5d5;border-radius:999px;background:#fff;color:#2c3659;cursor:pointer;font-size:12px;line-height:1;" },
         [sw, el("span", { text: c[1] })]);
       b.addEventListener("click", function () { emailState.canvas = c[0]; syncCanvas(); setCanvasHint(); render(); });
       canvasRow.appendChild(b);

@@ -854,6 +854,7 @@
         fd.append("email_subject", withEmail ? emailState.email.subject : "");
         fd.append("email_preheader", withEmail ? emailState.email.preheader : "");
         fd.append("email_body_html", withEmail ? renderEmailBody(true) : "");
+        fd.append("email_canvas", withEmail ? emailState.canvas : "");
 
         // The Turnstile widget lives in step 2, outside the <form>.
         var ts = root.querySelector('[name="cf-turnstile-response"]');
@@ -1153,20 +1154,25 @@
   function preheaderDiv(d) { return '<div style="display: none; max-height: 0px; overflow: hidden;">' + escHtml(d.preheader) + "</div>\n"; }
   var MSO_OPEN = '<!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->\n';
   var MSO_CLOSE = "<!--[if mso]></td></tr></table><![endif]-->\n";
-  /* The canvas behind the 600px card, painted from the body HTML (the CNL
-     Action Network wrapper is a transparent frame — see
-     cnl-event-intake/docs/an-wrapper.md). User-selectable per email. */
-  var CANVAS_DEFAULT = "#E6E8EF"; // CNL navy tint
+  /* The canvas behind the 600px card comes from an Action Network WRAPPER
+     ("CNL Canvas - …", one per color in every group; the Worker attaches the
+     picked one to the draft via the API). The body itself stays transparent
+     so nothing double-paints; the picker's key is submitted as email_canvas
+     and drives the preview color. */
+  var CANVAS_DEFAULT_KEY = "navy";
   var CANVAS_OPTIONS = [
-    ["Navy tint", "#E6E8EF"],
-    ["Warm greige", "#EAE7E0"],
-    ["Cool grey", "#EDF1F2"],
-    ["Deep putty", "#E0DCD2"],
-    ["White", "#FFFFFF"]
+    ["navy", "Navy tint", "#E6E8EF"],
+    ["greige", "Warm greige", "#EAE7E0"],
+    ["cool", "Cool grey", "#EDF1F2"],
+    ["putty", "Deep putty", "#E0DCD2"],
+    ["white", "White", "#FFFFFF"]
   ];
-  function chapterTint(P) { return mixColor(P.primary, "#ffffff", 0.9); }
-  function outerOpen(canvas) {
-    return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: ' + (canvas || CANVAS_DEFAULT) + ';">\n<tr><td align="center" style="padding: 28px 12px;">\n' + MSO_OPEN;
+  function canvasHex(key) {
+    var hit = CANVAS_OPTIONS.filter(function (c) { return c[0] === key; })[0];
+    return (hit || CANVAS_OPTIONS[0])[2];
+  }
+  function outerOpen() {
+    return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">\n<tr><td align="center" style="padding: 0;">\n' + MSO_OPEN;
   }
   function outerClose() { return MSO_CLOSE + "</td></tr>\n</table>\n"; }
   function coverRowHtml(d, tdStyle) {
@@ -1214,7 +1220,7 @@
         var c = d.colors, ch = d.chapter, logo = d.logo || { mode: "text" };
         var h = preheaderDiv(d) +
           "<style data-roadie-ignore>\n@media only screen and (max-width: 480px) {\n  .mob-pad { padding-left: 22px !important; padding-right: 22px !important; }\n  .mob-h1 { font-size: 46px !important; line-height: 48px !important; }\n  .mob-h2 { font-size: 20px !important; line-height: 26px !important; }\n}\n</style>\n" +
-          outerOpen(d.canvas) +
+          outerOpen() +
           '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width: 100%; max-width: 600px;">\n';
         var bg = 'bgcolor="' + c.bg + '" class="mob-pad" style="background-color: ' + c.bg + "; ";
         var art = (logo.mode === "banner" && logo.url)
@@ -1255,7 +1261,7 @@
         var muted = "#6B6875", body = "#3A3644", footerInk = "#55515F", footerText = "#8A8792";
         var h = preheaderDiv(d) +
           "<style data-roadie-ignore>\n@media only screen and (max-width: 480px) {\n  .mob-pad { padding-left: 24px !important; padding-right: 24px !important; }\n  .mob-h1 { font-size: 30px !important; line-height: 36px !important; }\n}\n</style>\n" +
-          outerOpen(d.canvas) +
+          outerOpen() +
           '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width: 100%; max-width: 600px; background-color: ' + c.paper + ';">\n';
         var mast = (logo.mode === "banner" && logo.url)
           ? '<div style="border-top: 3px solid ' + c.ink + "; border-bottom: 1px solid " + c.ink + '; padding: 12px 0px; text-align: center;">' + logoLink(ch, '<img src="' + escHtml(logo.url) + '" width="220" alt="' + escHtml(ch.name) + '" style="display: inline-block; width: 220px; max-width: 100%; height: auto; border: 0;">') + "</div>"
@@ -1310,7 +1316,7 @@
         var accentInk = P.on(c.accent);
         var h = preheaderDiv(d) +
           "<style data-roadie-ignore>\n@media only screen and (max-width: 480px) {\n  .mob-pad { padding-left: 24px !important; padding-right: 24px !important; }\n  .mob-h1 { font-size: 25px !important; line-height: 31px !important; }\n}\n</style>\n" +
-          outerOpen(d.canvas) +
+          outerOpen() +
           '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width: 100%; max-width: 600px; background-color: ' + c.paper + ';">\n';
         if (logo.mode === "banner" && logo.url) {
           h += "<tr><td>" + logoLink(ch, '<img src="' + escHtml(logo.url) + '" width="600" alt="' + escHtml(ch.name) + ' banner" style="display: block; width: 100%; max-width: 600px; height: auto; border: 0;">') + "</td></tr>\n";
@@ -1349,10 +1355,12 @@
   ];
 
   /* Wrap a body fragment in a document for the preview iframe / download. */
-  function wrapEmail(bodyHtml, title, canvas) {
+  /* Preview/download document. The body's padding + background simulate the
+     canvas wrapper AN applies at send time. */
+  function wrapEmail(bodyHtml, title, canvasKey) {
     return '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
       '<meta name="color-scheme" content="light dark">\n<meta name="supported-color-schemes" content="light dark">\n<title>' + escHtml(title) + "</title>\n</head>\n" +
-      '<body style="margin: 0; padding: 0; background-color: ' + (canvas || CANVAS_DEFAULT) + ';">\n' + bodyHtml + "\n</body>\n</html>\n";
+      '<body style="margin: 0; padding: 28px 12px; background-color: ' + canvasHex(canvasKey || CANVAS_DEFAULT_KEY) + ';">\n' + bodyHtml + "\n</body>\n</html>\n";
   }
 
   // ---------- default copy from the event details ----------
@@ -1524,7 +1532,7 @@
           brand: brand,
           event: collectEventData(ctx),
           email: null, P: null,
-          canvas: CANVAS_DEFAULT,
+          canvas: CANVAS_DEFAULT_KEY,
           rolesByTpl: {}, logoChosen: {},
           templateId: EMAIL_TEMPLATES[0].id,
           mobilePreview: false,
@@ -1721,22 +1729,22 @@
 
     /* --- background canvas (global, not per template) --- */
     left.appendChild(el("h4", { class: "cnl-ee-h", text: "Background" }));
-    left.appendChild(el("p", { class: "cnl-ef-hint", text: "The page color behind the email card — the same in every template." }));
+    left.appendChild(el("p", { class: "cnl-ef-hint", text: "The page color behind the email card — the same in every template. Applied by Action Network when the draft is created." }));
     var canvasRow = el("div", { role: "group", "aria-label": "Background color" });
     left.appendChild(canvasRow);
     function syncCanvas() {
       canvasRow.querySelectorAll("button").forEach(function (x) {
-        var on = (x.getAttribute("data-canvas") || "").toLowerCase() === emailState.canvas.toLowerCase();
+        var on = x.getAttribute("data-canvas") === emailState.canvas;
         x.setAttribute("aria-pressed", String(on));
         x.style.borderColor = on ? "#2c3659" : "#d5d5d5";
       });
     }
-    CANVAS_OPTIONS.concat([["Chapter tint", chapterTint(emailState.P)]]).forEach(function (c) {
-      var sw = el("span", { "aria-hidden": "true", style: "display:inline-block;width:18px;height:18px;border-radius:50%;border:1px solid rgba(0,0,0,0.25);background:" + c[1] });
-      var b = el("button", { type: "button", "data-canvas": c[1], title: c[0] + " · " + c[1],
+    CANVAS_OPTIONS.forEach(function (c) {
+      var sw = el("span", { "aria-hidden": "true", style: "display:inline-block;width:18px;height:18px;border-radius:50%;border:1px solid rgba(0,0,0,0.25);background:" + c[2] });
+      var b = el("button", { type: "button", "data-canvas": c[0], title: c[1] + " · " + c[2],
         style: "display:inline-flex;align-items:center;gap:6px;margin:0 8px 8px 0;padding:5px 10px;border:2px solid #d5d5d5;border-radius:999px;background:#fff;cursor:pointer;font-size:12px;line-height:1;" },
-        [sw, el("span", { text: c[0] })]);
-      b.addEventListener("click", function () { emailState.canvas = c[1]; syncCanvas(); render(); });
+        [sw, el("span", { text: c[1] })]);
+      b.addEventListener("click", function () { emailState.canvas = c[0]; syncCanvas(); render(); });
       canvasRow.appendChild(b);
     });
     syncCanvas();

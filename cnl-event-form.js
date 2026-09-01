@@ -854,7 +854,6 @@
         fd.append("email_subject", withEmail ? emailState.email.subject : "");
         fd.append("email_preheader", withEmail ? emailState.email.preheader : "");
         fd.append("email_body_html", withEmail ? renderEmailBody(true) : "");
-        fd.append("email_canvas", withEmail ? emailState.canvas : "");
 
         // The Turnstile widget lives in step 2, outside the <form>.
         var ts = root.querySelector('[name="cf-turnstile-response"]');
@@ -922,7 +921,11 @@
         (includeEmail
           ? " Your announcement email will land as a draft in your chapter's Action Network " +
             "account, with the RSVP button linked to the new event — review it there, send " +
-            "yourself a test, and send it to your list."
+            "yourself a test, and send it to your list." +
+            (emailState && emailState.canvas
+              ? " To get the background you previewed, set the draft's wrapper to “" +
+                canvasWrapperName(emailState.canvas) + "” in Action Network."
+              : "")
           : ""),
     }));
     root.appendChild(panel);
@@ -1155,22 +1158,23 @@
   var MSO_OPEN = '<!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->\n';
   var MSO_CLOSE = "<!--[if mso]></td></tr></table><![endif]-->\n";
   /* The canvas behind the 600px card comes from an Action Network WRAPPER
-     ("CNL Canvas - …", one per color in every group; the Worker attaches the
-     picked one to the draft via the API). The body itself stays transparent
-     so nothing double-paints; the picker's key is submitted as email_canvas
-     and drives the preview color. */
+     ("CNL Canvas - …", syndicated to every group from the parent network).
+     The API can't attach syndicated wrappers to drafts, so the sender picks
+     the wrapper in the AN UI; this picker is a PREVIEW of those choices and
+     drives the "pick this wrapper" hint. The body stays transparent. */
   var CANVAS_DEFAULT_KEY = "navy";
   var CANVAS_OPTIONS = [
-    ["navy", "Navy tint", "#E6E8EF"],
-    ["greige", "Warm greige", "#EAE7E0"],
-    ["cool", "Cool grey", "#EDF1F2"],
-    ["putty", "Deep putty", "#E0DCD2"],
-    ["white", "White", "#FFFFFF"]
+    ["navy", "Navy tint", "#E6E8EF", "CNL Canvas - Navy Tint"],
+    ["greige", "Warm greige", "#EAE7E0", "CNL Canvas - Warm Greige"],
+    ["cool", "Cool grey", "#EDF1F2", "CNL Canvas - Cool Grey"],
+    ["putty", "Deep putty", "#E0DCD2", "CNL Canvas - Deep Putty"],
+    ["white", "White", "#FFFFFF", "CNL Canvas - White"]
   ];
-  function canvasHex(key) {
-    var hit = CANVAS_OPTIONS.filter(function (c) { return c[0] === key; })[0];
-    return (hit || CANVAS_OPTIONS[0])[2];
+  function canvasOpt(key) {
+    return CANVAS_OPTIONS.filter(function (c) { return c[0] === key; })[0] || CANVAS_OPTIONS[0];
   }
+  function canvasHex(key) { return canvasOpt(key)[2]; }
+  function canvasWrapperName(key) { return canvasOpt(key)[3]; }
   function outerOpen() {
     return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">\n<tr><td align="center" style="padding: 0;">\n' + MSO_OPEN;
   }
@@ -1729,7 +1733,12 @@
 
     /* --- background canvas (global, not per template) --- */
     left.appendChild(el("h4", { class: "cnl-ee-h", text: "Background" }));
-    left.appendChild(el("p", { class: "cnl-ef-hint", text: "The page color behind the email card — the same in every template. Applied by Action Network when the draft is created." }));
+    var canvasHint = el("p", { class: "cnl-ef-hint" });
+    function setCanvasHint() {
+      canvasHint.textContent = "Preview the page color behind the card. The color itself comes from a wrapper in Action Network — when you send, set the draft's wrapper to “" + canvasWrapperName(emailState.canvas) + "” to match this preview.";
+    }
+    setCanvasHint();
+    left.appendChild(canvasHint);
     var canvasRow = el("div", { role: "group", "aria-label": "Background color" });
     left.appendChild(canvasRow);
     function syncCanvas() {
@@ -1744,7 +1753,7 @@
       var b = el("button", { type: "button", "data-canvas": c[0], title: c[1] + " · " + c[2],
         style: "display:inline-flex;align-items:center;gap:6px;margin:0 8px 8px 0;padding:5px 10px;border:2px solid #d5d5d5;border-radius:999px;background:#fff;cursor:pointer;font-size:12px;line-height:1;" },
         [sw, el("span", { text: c[1] })]);
-      b.addEventListener("click", function () { emailState.canvas = c[0]; syncCanvas(); render(); });
+      b.addEventListener("click", function () { emailState.canvas = c[0]; syncCanvas(); setCanvasHint(); render(); });
       canvasRow.appendChild(b);
     });
     syncCanvas();

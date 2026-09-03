@@ -1132,6 +1132,28 @@
     u = String(u || "").trim();
     return /^https?:\/\//i.test(u) || /^mailto:/i.test(u) ? escHtml(u) : "#";
   }
+  /* The two "where" lines. Gmail (and Apple Mail) auto-detect street
+     addresses and wrap them in their own link — default blue, underlined —
+     which on a coloured header reads badly. Text that is already inside an
+     <a> is left alone, so the address goes out as an explicit Google Maps
+     link in the surrounding colour: the address part of where2 when
+     d.address is found in it, otherwise the whole line (the text was edited,
+     the venue is the same); where1 too when it carries a street number (the
+     venue field holding an address). No mapsUrl (online, no address) = plain
+     text. Same helper lives in the tools site's email-builder/templates.js. */
+  function whereHtml(d, color, upper) {
+    var t = function (s) { return escHtml(upper ? String(s).toUpperCase() : s); };
+    var w1 = String(d.where1 || ""), w2 = String(d.where2 || "");
+    var url = d.mapsUrl ? safeUrl(d.mapsUrl) : "";
+    var link = function (s) { return '<a target="_blank" href="' + url + '" style="color: ' + color + '; text-decoration: underline;">' + t(s) + "</a>"; };
+    var out = url && /\d/.test(w1) ? link(w1) : t(w1);
+    if (!w2) return out;
+    if (!url) return out + "<br>" + t(w2);
+    var addr = String(d.address || "").replace(/\s+/g, " ").trim();
+    var i = addr ? w2.indexOf(addr) : -1;
+    if (i < 0) return out + "<br>" + link(w2);
+    return out + "<br>" + t(w2.slice(0, i)) + link(addr) + t(w2.slice(i + addr.length));
+  }
   function emailParagraphs(s) {
     var ps = String(s || "").split(/\n\s*\n/).filter(function (p) { return p.trim(); });
     return ps.map(function (p, i) {
@@ -1236,7 +1258,7 @@
         h += "<tr><td " + bg + 'padding: 0px 36px;"><div style="border-top: 4px solid ' + c.ink + '; font-size: 0px; line-height: 0px;">&nbsp;</div></td></tr>\n';
         h += coverRowHtml(d, "background-color: " + c.bg + "; padding: 24px 36px 0px 36px;");
         h += '<tr><td bgcolor="' + c.bg + '" class="mob-pad mob-h2" style="background-color: ' + c.bg + "; padding: 18px 36px 6px 36px; font-family: " + F_IMPACT + "; font-size: 26px; font-weight: normal; letter-spacing: 1px; color: " + c.ink + '; mso-line-height-rule: exactly; line-height: 32px;">' + escHtml(d.when.toUpperCase()) + "</td></tr>\n";
-        h += "<tr><td " + bg + "padding: 0px 36px 32px 36px; font-family: " + F_TREB + "; font-size: 17px; font-weight: bold; letter-spacing: 1px; color: " + c.inkSoft + '; mso-line-height-rule: exactly; line-height: 26px;">' + escHtml(d.where1.toUpperCase()) + (d.where2 ? "<br>" + escHtml(d.where2.toUpperCase()) : "") + "</td></tr>\n";
+        h += "<tr><td " + bg + "padding: 0px 36px 32px 36px; font-family: " + F_TREB + "; font-size: 17px; font-weight: bold; letter-spacing: 1px; color: " + c.inkSoft + '; mso-line-height-rule: exactly; line-height: 26px;">' + whereHtml(d, c.inkSoft, true) + "</td></tr>\n";
         h += "<tr><td " + bg + 'padding: 0px 36px 40px 36px;">\n<table role="presentation" cellpadding="0" cellspacing="0" border="0">\n<tr><td bgcolor="#FFFFFF" style="background-color: #FFFFFF;">\n' +
           '<a target="_blank" href="' + safeUrl(d.ctaUrl) + '" style="display: block; padding: 16px 44px; font-family: ' + F_IMPACT + "; font-size: 17px; font-weight: normal; letter-spacing: 2px; color: " + c.cta + '; text-decoration: none;">' + escHtml(d.ctaLabel.toUpperCase()) + "</a>\n</td></tr>\n</table>\n</td></tr>\n";
         var bandInk = d.P.on(c.band, d.P.dark);
@@ -1284,7 +1306,7 @@
           '<!--[if mso]><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td width="50%" valign="top"><![endif]-->\n' +
           col("WHEN", escHtml(d.dateLong) + "<br>" + escHtml(d.timeRange), "16px") +
           '<!--[if mso]></td><td width="50%" valign="top"><![endif]-->\n' +
-          col("WHERE", escHtml(d.where1) + (d.where2 ? "<br>" + escHtml(d.where2) : ""), "0px") +
+          col("WHERE", whereHtml(d, c.ink, false), "0px") +
           "<!--[if mso]></td></tr></table><![endif]-->\n</td></tr>\n";
         h += '<tr><td class="mob-pad" style="padding: 20px 48px 0px 48px; font-family: ' + F_GEORGIA + "; font-size: 16px; color: " + body + '; mso-line-height-rule: exactly; line-height: 26px;">\n' + emailParagraphs(d.body) + "\n</td></tr>\n";
         h += '<tr><td align="center" class="mob-pad" style="padding: 30px 48px 8px 48px;">\n<table role="presentation" cellpadding="0" cellspacing="0" border="0">\n<tr><td bgcolor="' + c.ink + '" style="background-color: ' + c.ink + '; border-radius: 2px;">\n' +
@@ -1341,7 +1363,7 @@
           '<!--[if mso]></td><td valign="middle"><![endif]-->\n' +
           '<div style="display: inline-block; width: 100%; max-width: 386px; vertical-align: middle;">\n<div style="padding: 16px 22px;">\n' +
           '<div style="font-family: ' + F_HELV + "; font-size: 15px; font-weight: bold; color: " + c.ink + '; mso-line-height-rule: exactly; line-height: 22px;">' + escHtml(d.timeRange) + "</div>\n" +
-          '<div style="font-family: ' + F_HELV + "; font-size: 15px; color: " + body + '; padding-top: 4px; mso-line-height-rule: exactly; line-height: 22px;">' + escHtml(d.where1) + (d.where2 ? "<br>" + escHtml(d.where2) : "") + "</div>\n</div>\n</div>\n" +
+          '<div style="font-family: ' + F_HELV + "; font-size: 15px; color: " + body + '; padding-top: 4px; mso-line-height-rule: exactly; line-height: 22px;">' + whereHtml(d, body, false) + "</div>\n</div>\n</div>\n" +
           "<!--[if mso]></td></tr></table><![endif]-->\n</td></tr>\n</table>\n</td></tr>\n";
         h += coverRowHtml(d, "padding: 24px 44px 0px 44px;");
         h += '<tr><td class="mob-pad" style="padding: 24px 44px 0px 44px; font-family: ' + F_HELV + "; font-size: 15px; color: " + body + '; mso-line-height-rule: exactly; line-height: 24px;">' + emailParagraphs(d.body) + "</td></tr>\n";
@@ -1460,6 +1482,7 @@
       end_date: val("end_date"), end_time: composeTime("end_time"),
       event_format: fmt, event_type: val("event_type"),
       venue_name: venueName, formatted_address: formattedAddress,
+      place_id: fmt !== "online" && !ctx.manualMode && selectedPlace ? selectedPlace.placeId || "" : "",
       meeting_url: fmt === "in_person" ? "" : val("meeting_url")
     };
   }
@@ -1478,6 +1501,16 @@
     return out.toDataURL("image/jpeg", 0.82);
   }
 
+  /* Google Maps link for the venue — the templates wrap the address in it
+     (whereHtml) so Gmail's own auto-link, default blue, never appears.
+     Google-picked venues pin the exact place via query_place_id. */
+  function mapsUrlFor(ev) {
+    var addr = String(ev.formatted_address || "").replace(/\s+/g, " ").trim();
+    if (ev.event_format === "online" || !addr) return "";
+    var q = [String(ev.venue_name || "").trim(), addr].filter(Boolean).join(", ");
+    return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(q) +
+      (ev.place_id ? "&query_place_id=" + encodeURIComponent(ev.place_id) : "");
+  }
   function emailTemplateData(forSubmit) {
     var e = emailState.email, ev = emailState.event, d = evDate(ev);
     var brand = emailState.brand;
@@ -1490,6 +1523,7 @@
       canvas: emailState.canvas,
       P: emailState.P,
       monthShort: MON[d.getMonth()], day: String(d.getDate()), weekday: DOW_LONG[d.getDay()].toUpperCase(),
+      address: ev.formatted_address, mapsUrl: mapsUrlFor(ev),
       ctaUrl: EMAIL_EVENT_URL_SENTINEL,
       coverSrc: forSubmit ? EMAIL_COVER_SENTINEL : coverPreviewUrl
     });

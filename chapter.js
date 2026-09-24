@@ -100,6 +100,8 @@
       meeting: col(row, 'Meeting'),
       photo: { src: col(row, 'PhotoURL'), caption: col(row, 'PhotoCaption') },
       tz: col(row, 'Timezone'),
+      /* Blank Country counts as US so the ZIP field stays on by default. */
+      us: /^(unitedstates|usa?)?$/.test(cleanStr(col(row, 'Country'))),
       eaLink: col(row, 'EveryAction Link'),
       social: social, links: links, officers: officers
     };
@@ -300,7 +302,7 @@
         showNames: true,
         showLastName: true,    /* chapter AN forms: first + last name, email, mobile, ZIP */
         showPhone: true,
-        showZip: true,
+        showZip: c.us,         /* the component and Worker only accept US ZIPs, so non-US chapters skip it */
         buttonLabel: 'Join the chapter',
         buttonLoadingLabel: 'Joining…',
         successHeading: 'You’re in.',

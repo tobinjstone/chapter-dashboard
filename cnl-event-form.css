@@ -358,3 +358,606 @@
     gap: 0;
   }
 }
+
+/* =====================================================================
+   Step 2 — announcement email editor (cnl-ee-*). Same scoping rules as
+   the rest of the widget: everything under .cnl-event-form, no leaks.
+   ===================================================================== */
+
+.cnl-event-form .cnl-ee-head .cnl-ef-section {
+  margin-top: 0;
+}
+
+.cnl-event-form .cnl-ee-editor {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 26px;
+  align-items: start;
+  margin-top: 18px;
+}
+
+@media (min-width: 900px) {
+  .cnl-event-form .cnl-ee-editor {
+    grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);
+    column-gap: 40px;
+  }
+}
+
+.cnl-event-form .cnl-ee-h {
+  font-family: "pragmatica-extended", "Arial Black", sans-serif;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--cnl-ef-navy);
+  font-size: 0.95em;
+  margin: 24px 0 8px;
+  padding-bottom: 4px;
+  border-bottom: 2px solid var(--cnl-ef-navy);
+}
+
+.cnl-event-form .cnl-ee-pane > .cnl-ee-h:first-child,
+.cnl-event-form .cnl-ee-h--bare {
+  margin-top: 0;
+}
+
+.cnl-event-form .cnl-ee-h--bare {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.cnl-event-form .cnl-ee-group {
+  display: grid;
+  gap: 12px;
+}
+
+.cnl-event-form .cnl-ee-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 480px) {
+  .cnl-event-form .cnl-ee-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cnl-event-form .cnl-ee-field textarea.cnl-ef-input {
+  min-height: 120px;
+  resize: vertical;
+}
+
+/* template picker */
+.cnl-event-form .cnl-ee-templates {
+  display: grid;
+  gap: 6px;
+}
+
+.cnl-event-form .cnl-ee-tpl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  align-items: start;
+  padding: 7px 10px;
+  border: 2px solid var(--cnl-ef-navy);
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  font-size: 1em;
+  color: var(--cnl-ef-ink);
+}
+
+.cnl-event-form .cnl-ee-tpl[aria-pressed="true"] {
+  border-color: var(--cnl-ef-red);
+  box-shadow: 3px 3px 0 var(--cnl-ef-red);
+}
+
+.cnl-event-form .cnl-ee-tpl__name {
+  font-weight: 700;
+  font-size: 0.9em;
+}
+
+.cnl-event-form .cnl-ee-tpl__blurb {
+  font-size: 0.75em;
+  opacity: 0.8;
+  margin: 1px 0 0;
+  line-height: 1.3;
+}
+
+.cnl-event-form .cnl-ee-tpl__dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--cnl-ef-navy);
+  margin-top: 4px;
+}
+
+.cnl-event-form .cnl-ee-tpl[aria-pressed="true"] .cnl-ee-tpl__dot {
+  background: var(--cnl-ef-red);
+  border-color: var(--cnl-ef-red);
+}
+
+/* logo picker */
+.cnl-event-form .cnl-ee-logos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 6px;
+}
+
+.cnl-event-form .cnl-ee-logo {
+  display: grid;
+  gap: 3px;
+  padding: 3px;
+  font-family: inherit;
+  color: var(--cnl-ef-ink);
+  text-align: center;
+  border: 2px solid var(--cnl-ef-navy);
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.cnl-event-form .cnl-ee-logo[aria-pressed="true"] {
+  border-color: var(--cnl-ef-red);
+  box-shadow: 2px 2px 0 var(--cnl-ef-red);
+}
+
+.cnl-event-form .cnl-ee-logo__thumb {
+  display: grid;
+  place-items: center;
+  height: 36px;
+  border-radius: 3px;
+  overflow: hidden;
+  padding: 3px;
+}
+
+.cnl-event-form .cnl-ee-logo__thumb img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.cnl-event-form .cnl-ee-logo__text {
+  font-family: "pragmatica-extended", "Arial Black", sans-serif;
+  font-weight: 700;
+  font-size: 0.7em;
+  letter-spacing: 0.1em;
+}
+
+.cnl-event-form .cnl-ee-logo__label {
+  font-size: 0.65em;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* footer link toggles */
+.cnl-event-form .cnl-ee-socials {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+
+.cnl-event-form .cnl-ee-social {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9em;
+  min-height: 30px;
+  font-weight: normal;
+  cursor: pointer;
+}
+
+/* colour roles */
+.cnl-event-form .cnl-ee-colors {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.cnl-event-form .cnl-ee-color {
+  display: grid;
+  gap: 4px;
+}
+
+.cnl-event-form .cnl-ee-color .cnl-ef-label {
+  font-size: 11px;
+  margin-bottom: 0;
+}
+
+.cnl-event-form .cnl-ee-color__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cnl-event-form .cnl-ee-color input[type="color"] {
+  width: 44px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--cnl-ef-navy);
+  border-radius: 4px;
+  background: #fff;
+}
+
+.cnl-event-form .cnl-ee-color code {
+  font-size: 0.75em;
+}
+
+.cnl-event-form .cnl-ee-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.cnl-event-form .cnl-ee-swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  border: 1.5px solid rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  padding: 0;
+}
+
+.cnl-event-form .cnl-ee-swatch:focus-visible {
+  outline: 3px solid var(--cnl-ef-red);
+  outline-offset: 2px;
+}
+
+/* preview */
+.cnl-event-form .cnl-ee-preview-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.cnl-event-form .cnl-ee-seg {
+  display: inline-flex;
+  border: 2px solid var(--cnl-ef-navy);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.cnl-event-form .cnl-ee-seg button {
+  font-family: "ff-tisa-web-pro", Georgia, serif;
+  font-weight: 800;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 8px 14px;
+  background: #fff;
+  color: var(--cnl-ef-navy);
+  border: 0;
+  cursor: pointer;
+  min-height: 38px;
+}
+
+.cnl-event-form .cnl-ee-seg button[aria-pressed="true"] {
+  background: var(--cnl-ef-navy);
+  color: var(--cnl-ef-cream);
+}
+
+.cnl-event-form .cnl-ee-preview-frame {
+  display: block;
+  width: 100%;
+  height: 760px;
+  border: 1px solid var(--cnl-ef-navy);
+  border-radius: 8px;
+  background: #edf1f2;
+  margin: 0 auto;
+  transition: width 120ms;
+}
+
+.cnl-event-form .cnl-ee-preview-frame.is-mobile {
+  width: 390px;
+  max-width: 100%;
+}
+
+.cnl-event-form .cnl-ee-subject {
+  font-size: 0.9em;
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  background: #fff;
+  border: 1px solid var(--cnl-ef-navy);
+  border-radius: 6px;
+}
+
+.cnl-event-form .cnl-ee-subject strong {
+  font-family: "ff-tisa-web-pro", Georgia, serif;
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cnl-ef-navy);
+  margin-right: 8px;
+}
+
+.cnl-event-form .cnl-ee-subject .cnl-ee-pre {
+  opacity: 0.6;
+}
+
+/* actions */
+.cnl-event-form .cnl-ee-dl {
+  margin-top: 12px;
+}
+
+.cnl-event-form .cnl-ee-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: 18px;
+}
+
+.cnl-event-form .cnl-ee-skip {
+  text-align: center;
+  margin: 4px 0 0;
+  font-size: 0.9em;
+}
+
+/* =====================================================================
+   Step indicator (cnl-ef-step*) — above every step.
+   ===================================================================== */
+
+.cnl-event-form .cnl-ef-steps {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0 0 22px;
+  padding: 0;
+}
+
+.cnl-event-form .cnl-ef-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: "ff-tisa-web-pro", Georgia, serif;
+  font-weight: 800;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6b7084;
+}
+
+/* the rule between steps */
+.cnl-event-form .cnl-ef-step + .cnl-ef-step::before {
+  content: "";
+  width: 28px;
+  height: 2px;
+  background: var(--cnl-ef-line);
+}
+
+.cnl-event-form .cnl-ef-step-num {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  font-size: 12px;
+}
+
+.cnl-event-form .cnl-ef-step--current,
+.cnl-event-form .cnl-ef-step--done {
+  color: var(--cnl-ef-navy);
+}
+
+.cnl-event-form .cnl-ef-step--current .cnl-ef-step-num {
+  background: var(--cnl-ef-navy);
+  border-color: var(--cnl-ef-navy);
+  color: var(--cnl-ef-cream);
+}
+
+.cnl-event-form .cnl-ef-step--done .cnl-ef-step-num {
+  background: var(--cnl-ef-red);
+  border-color: var(--cnl-ef-red);
+  color: var(--cnl-ef-cream);
+}
+
+.cnl-event-form .cnl-ef-step--skipped .cnl-ef-step-label {
+  text-decoration: line-through;
+}
+
+.cnl-event-form .cnl-ef-step-note {
+  display: none;
+  font-family: "Domine", Georgia, serif;
+  font-weight: 400;
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.cnl-event-form .cnl-ef-step--skipped .cnl-ef-step-note {
+  display: inline;
+}
+
+/* Cover image: build it on the graphic step, or upload one. */
+.cnl-event-form .cnl-ef-cover-choice {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.cnl-event-form .cnl-ef-cover-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1.5px solid var(--cnl-ef-line);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.cnl-event-form .cnl-ef-cover-opt--on {
+  border-color: var(--cnl-ef-navy);
+  box-shadow: 3px 3px 0 var(--cnl-ef-red);
+}
+
+.cnl-event-form .cnl-ef-cover-opt:focus-within {
+  outline: 3px solid rgba(159, 60, 57, 0.45);
+  outline-offset: 1px;
+}
+
+.cnl-event-form .cnl-ef-cover-opt input {
+  flex: none;
+  margin: 4px 0 0;
+  accent-color: var(--cnl-ef-navy);
+}
+
+.cnl-event-form .cnl-ef-cover-opt strong {
+  display: block;
+  font-family: "ff-tisa-web-pro", Georgia, serif;
+  font-weight: 800;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--cnl-ef-navy);
+}
+
+.cnl-event-form .cnl-ef-cover-sub {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.85em;
+  color: #5a5f72;
+}
+
+/* =====================================================================
+   Graphic step (cnl-eg-*) — the tools site's event graphics builder,
+   framed. Same scoping rules as the rest of the widget.
+   ===================================================================== */
+
+.cnl-event-form .cnl-eg-box {
+  position: relative;
+  margin-top: 14px;
+  background: var(--cnl-ef-cream);
+  border: 1.5px solid var(--cnl-ef-navy);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* Wide, the builder fits its three panes into this height (its side panels
+   scroll inside). Narrow, it stacks and reports its content height, which
+   the script sets inline so the page scrolls once. */
+.cnl-event-form .cnl-eg-frame {
+  display: block;
+  width: 100%;
+  height: clamp(640px, calc(100vh - 160px), 900px);
+  border: 0;
+}
+
+/* Covers the frame while it loads, or with the error if it doesn't. */
+.cnl-event-form .cnl-eg-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  text-align: center;
+  background: var(--cnl-ef-cream);
+}
+
+.cnl-event-form .cnl-eg-loading p {
+  max-width: 440px;
+  margin: 0;
+}
+
+.cnl-event-form .cnl-eg-loading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+/* The actions stay in reach while a tall frame scrolls past. */
+.cnl-event-form .cnl-eg-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 14px;
+  margin-top: 14px;
+  padding: 12px 0;
+  background: var(--cnl-ef-cream);
+  border-top: 1px solid var(--cnl-ef-line);
+}
+
+.cnl-event-form .cnl-eg-bar-end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 14px;
+}
+
+.cnl-event-form .cnl-eg-bar .cnl-ef-submit {
+  width: auto;
+  margin: 0;
+  padding: 0 24px;
+}
+
+.cnl-event-form .cnl-eg-btn-outline {
+  font-family: "ff-tisa-web-pro", Georgia, serif;
+  font-weight: 800;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--cnl-ef-navy);
+  background: transparent;
+  border: 1.5px solid var(--cnl-ef-navy);
+  border-radius: 6px;
+  padding: 8px 14px;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 var(--cnl-ef-red);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.cnl-event-form .cnl-eg-btn-outline:hover:not(:disabled) {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--cnl-ef-red);
+}
+
+.cnl-event-form .cnl-eg-btn-outline:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.cnl-event-form .cnl-eg-status {
+  min-height: 1.3em;
+  margin: 6px 0 0;
+  text-align: right;
+}
+
+.cnl-event-form .cnl-eg-foot {
+  margin: 2px 0 0;
+  text-align: right;
+}
+
+@media (max-width: 480px) {
+  .cnl-event-form .cnl-eg-bar-end,
+  .cnl-event-form .cnl-eg-bar .cnl-ef-submit {
+    width: 100%;
+  }
+  .cnl-event-form .cnl-eg-status,
+  .cnl-event-form .cnl-eg-foot {
+    text-align: left;
+  }
+}

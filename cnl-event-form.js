@@ -7,7 +7,10 @@
  *     window.CNL_EVENT_FORM = {
  *       endpoint: "https://cnl-event-intake.YOURSUB.workers.dev",
  *       placesApiKey: "AIza...",        // optional; manual address if absent
- *       turnstileSiteKey: "0x4AAA..."   // optional; no bot check if absent
+ *       turnstileSiteKey: "0x4AAA...",  // optional; no bot check if absent
+ *       graphicsBuilderUrl: "..."       // optional; the event graphics builder
+ *                                       // framed in the graphic step (default:
+ *                                       // tools.cnlhq.org's), false = upload only
  *     };
  *   </script>
  *   <script src=".../cnl-event-form.js"></script>
@@ -43,14 +46,33 @@
   var crop = null; // {img, canvas, box:{x,y,size}, scale, isPng, hasAlpha}
   var submitting = false;
 
-  // Step 2 (announcement email) state — see the email module further down.
-  var formEl = null; // the step-1 <form>, kept in the DOM (hidden) during step 2
-  var step2Wrap = null; // the email editor container, built on first entry
-  var lastCtx = null; // {manualMode, currentFormat} captured when entering step 2
+  // Steps: "details" (the <form>) → "graphic" (only when the submitter builds
+  // their cover) → "email". Every step's container stays in the DOM, hidden.
+  var currentStep = "details";
+  var stepsEl = null; // the step indicator above the steps
+  var formEl = null; // the details <form>, kept in the DOM (hidden) during later steps
+  var lastCtx = null; // {manualMode, currentFormat} captured when leaving the details step
+
+  // Graphic step state — see the graphic module further down.
+  var graphicWrap = null; // the graphic step container, built on first entry
+  var graphic = null; // {frame, origin, chapterCode, ready, cover:{blob, previewUrl}|null, …}
+
+  // Email step state — see the email module further down.
+  var emailWrap = null; // the email editor container, built on first entry
   var emailState = null; // {chapterCode, event, email, P, rolesByTpl, logoChosen, templateId, mobilePreview}
   var brandRows = null; // parsed roster-sheet rows (brand colours, logos, socials)
-  var coverPreviewUrl = ""; // 600px JPEG data URL of the crop, preview only
-  var tsWidgetId = null; // Turnstile widget id (rendered in step 2)
+  var coverPreviewUrl = ""; // 600px JPEG data URL of the cover, preview only
+  var tsWidgetId = null; // Turnstile widget id (rendered in the email step)
+
+  // The event graphics builder (tools site) that the graphic step frames.
+  // The tools site's own copy of this form points at its sibling tool, so the
+  // admin site and local previews frame their own builder.
+  var GRAPHICS_BUILDER_URL = null;
+  if (cfg.graphicsBuilderUrl !== false) {
+    try {
+      GRAPHICS_BUILDER_URL = new URL(cfg.graphicsBuilderUrl || "https://tools.cnlhq.org/tools/event-graphics/", location.href).href;
+    } catch (err) { /* bad URL: upload-only cover */ }
+  }
 
   // Placeholder URLs baked into the submitted email HTML; the Worker swaps
   // them for the real Luma CDN cover URL (at /submit) and the real lu.ma
@@ -297,11 +319,31 @@
       el("input", { type: "number", name: "max_capacity", class: "cnl-ef-input", min: "1", step: "1" }),
       "Leave blank for no cap."));
 
-    // Cover image + crop
+    // Cover image: build it on the graphic step, or upload one and crop it here.
     colB.appendChild(el("h3", { class: "cnl-ef-section", text: "Cover image" }));
+    if (GRAPHICS_BUILDER_URL) {
+      colB.appendChild(el("p", { class: "cnl-ef-hint", text: "The square image on your Luma event page." }));
+      var coverChoice = el("div", { class: "cnl-ef-field", "data-field": "cover_choice" });
+      var coverOpts = el("div", { class: "cnl-ef-cover-choice", role: "radiogroup", "aria-label": "Cover image" });
+      [["build", "I'll build my event graphic on the next page",
+        "Your event details and chapter colors are filled in for you. The square version becomes your Luma cover, and you can download a 4:5 portrait for Instagram too."],
+      ["upload", "I'll upload my own graphic",
+        "JPEG or PNG, under 10 MB. Covers are square; you'll drag a box to choose the crop."]].forEach(function (o, i) {
+        var radio = el("input", { type: "radio", name: "cover_mode", value: o[0] });
+        if (i === 0) radio.checked = true;
+        coverOpts.appendChild(el("label", { class: "cnl-ef-cover-opt" }, [radio, el("span", {}, [
+          el("strong", { text: o[1] }),
+          el("span", { class: "cnl-ef-cover-sub", text: o[2] })
+        ])]));
+      });
+      coverChoice.appendChild(coverOpts);
+      coverChoice.appendChild(el("p", { class: "cnl-ef-inline-error", role: "alert", "aria-live": "polite" }));
+      colB.appendChild(coverChoice);
+    }
     var fileInput = el("input", { type: "file", name: "cover_file", accept: "image/jpeg,image/png", class: "cnl-ef-input cnl-ef-file" });
-    colB.appendChild(field("cover_image", "Upload a cover (JPEG or PNG, under 10 MB)",
-      fileInput, "Covers are square. Drag the box to choose the crop."));
+    var uploadField = field("cover_image", "Upload a cover (JPEG or PNG, under 10 MB)",
+      fileInput, "Covers are square. Drag the box to choose the crop.");
+    colB.appendChild(uploadField);
     var cropWrap = el("div", { class: "cnl-ef-crop", style: "display:none" });
     colB.appendChild(cropWrap);
 
@@ -338,14 +380,17 @@
         "Provided to chapter leads."));
     }
 
-    // Turnstile renders in step 2 (the email editor), next to the real submit
-    // buttons — a token minted here would expire while the email is built.
+    // Turnstile renders in the email step, next to the real submit buttons —
+    // a token minted here would expire while the graphic and email are built.
 
-    var submitBtn = el("button", { type: "submit", class: "cnl-ef-submit", text: "Next: announcement email →" });
+    // Label and hint depend on the cover choice (refreshCover below).
+    var submitBtn = el("button", { type: "submit", class: "cnl-ef-submit" });
     colB.appendChild(submitBtn);
-    colB.appendChild(el("p", { class: "cnl-ef-hint", text: "Next you'll build the announcement email (or skip it), then submit. CNL staff review every event before it goes live." }));
+    var nextHint = el("p", { class: "cnl-ef-hint" });
+    colB.appendChild(nextHint);
 
     root.innerHTML = "";
+    root.appendChild(buildSteps());
     root.appendChild(form);
     formEl = form;
 
@@ -482,6 +527,28 @@
     wirePlaces(locInput, suggBox, picked);
     wireCrop(fileInput, cropWrap);
 
+    // Cover choice: building it adds the graphic step; uploading shows the
+    // file field and crop, as before.
+    function refreshCover() {
+      var building = coverMode() === "build";
+      uploadField.style.display = building ? "none" : "";
+      cropWrap.style.display = building || !crop ? "none" : "";
+      form.querySelectorAll(".cnl-ef-cover-opt").forEach(function (lab) {
+        lab.classList.toggle("cnl-ef-cover-opt--on", lab.querySelector("input").checked);
+      });
+      submitBtn.textContent = building ? "Next: build your event graphic →" : "Next: announcement email →";
+      nextHint.textContent = (building
+        ? "Next you'll build the event graphic, then the announcement email (or skip it), then submit."
+        : "Next you'll build the announcement email (or skip it), then submit.") +
+        " CNL staff review every event before it goes live.";
+      setError("cover_choice", "");
+      paintSteps();
+    }
+    form.querySelectorAll('[name="cover_mode"]').forEach(function (r) {
+      r.addEventListener("change", refreshCover);
+    });
+    refreshCover();
+
     form.addEventListener("submit", function (e) {
       e.preventDefault();
       clearErrors();
@@ -491,8 +558,15 @@
         renderErrors(errors);
         return;
       }
-      enterEmailStep(ctx);
+      if (coverMode() === "build") enterGraphicStep(ctx);
+      else enterEmailStep(ctx);
     });
+  }
+
+  /** "build" (the graphic step makes the cover) or "upload" (crop an image). */
+  function coverMode() {
+    var checked = root.querySelector('[name="cover_mode"]:checked');
+    return checked ? checked.value : "upload";
   }
 
   // ---------- Google Places Autocomplete (New), lazy-loaded ----------
@@ -725,14 +799,14 @@
     });
   }
 
-  // ---------- Turnstile (rendered in the step-2 actions area) ----------
+  // ---------- Turnstile (rendered in the email step's actions area) ----------
   function renderTurnstile(slot) {
     if (!cfg.turnstileSiteKey) return;
     function doRender() {
       tsWidgetId = window.turnstile.render(slot, { sitekey: cfg.turnstileSiteKey });
     }
     if (window.turnstile) {
-      // Re-entering step 2: the widget survives in the kept DOM — refresh its
+      // Re-entering the email step: the widget survives in the kept DOM — refresh its
       // token rather than rendering a duplicate.
       if (tsWidgetId !== null && slot.childNodes.length) window.turnstile.reset(tsWidgetId);
       else doRender();
@@ -776,7 +850,12 @@
     if (fmt !== "in_person" && !/^https?:\/\//.test(val("meeting_url"))) {
       errors.meeting_url = "A meeting link is required for online events.";
     }
-    if (!crop) errors.cover_image = "A cover image is required.";
+    // A built cover is checked at submit (it only exists after the graphic step).
+    if (coverMode() === "upload" && !crop) {
+      errors.cover_image = GRAPHICS_BUILDER_URL
+        ? "Upload a cover image, or choose to build one on the next page."
+        : "A cover image is required.";
+    }
     for (var i = 2; i <= 3; i++) {
       if ((val("cohost_" + i + "_name") || val("cohost_" + i + "_email")) &&
         !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(val("cohost_" + i + "_email"))) {
@@ -787,11 +866,20 @@
     return errors;
   }
 
-  // ---------- submit (called from the step-2 buttons) ----------
+  /** The cover to upload: the built graphic's square PNG, or the crop. */
+  function coverImage() {
+    if (coverMode() === "build") return Promise.resolve({ blob: graphic.cover.blob, type: "image/png" });
+    return exportCrop();
+  }
+
+  // ---------- submit (called from the email-step buttons) ----------
   function submit(form, submitBtn, ctx, includeEmail) {
     if (submitting) return;
     clearErrors();
     var errors = clientValidate(ctx);
+    if (coverMode() === "build" && !(graphic && graphic.cover)) {
+      errors.cover_choice = "Your event graphic isn't saved yet — build it on the next page.";
+    }
     if (Object.keys(errors).length) {
       renderErrors(errors);
       return;
@@ -803,8 +891,8 @@
     submitBtn.textContent = "Submitting…";
     form.classList.add("cnl-ef-busy");
 
-    exportCrop()
-      .then(function (cropped) {
+    coverImage()
+      .then(function (cover) {
         var fd = new FormData();
         var fmt = ctx.currentFormat();
         fd.append("chapter_code", presetChapter || val("chapter_code"));
@@ -843,8 +931,8 @@
           var box = form.querySelector('[name="cohost_' + i + '_show_on_page"]');
           fd.append("cohost_" + i + "_show_on_page", box && box.checked ? "true" : "false");
         }
-        var ext = cropped.type === "image/png" ? "png" : "jpg";
-        fd.append("cover_image", cropped.blob, "cover." + ext);
+        var ext = cover.type === "image/png" ? "png" : "jpg";
+        fd.append("cover_image", cover.blob, "cover." + ext);
 
         // Announcement email — every key always present (Zapier field-mapping
         // contract), empty when the submitter skipped the email.
@@ -855,7 +943,7 @@
         fd.append("email_preheader", withEmail ? emailState.email.preheader : "");
         fd.append("email_body_html", withEmail ? renderEmailBody(true) : "");
 
-        // The Turnstile widget lives in step 2, outside the <form>.
+        // The Turnstile widget lives in the email step, outside the <form>.
         var ts = root.querySelector('[name="cf-turnstile-response"]');
         if (ts) fd.append("cf-turnstile-response", ts.value);
         return fetch(endpoint + "/submit", { method: "POST", body: fd });
@@ -890,15 +978,17 @@
   }
 
   function renderErrors(errors) {
-    // Server errors can land while step 2 is showing; form-field errors mean
-    // going back to step 1 so the submitter can see and fix them.
+    // Server errors land while the email step is showing; form-field errors
+    // mean going back to the details so the submitter can see and fix them.
     var keys = Object.keys(errors);
     var hasFormError = keys.some(function (k) { return k.indexOf("email_") !== 0; });
-    if (hasFormError && step2Wrap && step2Wrap.style.display !== "none") showStep(1);
+    if (hasFormError && currentStep !== "details") showStep("details");
     var firstField = null;
     var unplaced = [];
     keys.forEach(function (key) {
       var mapped = key === "manual_address" ? "manual_address" : key;
+      // A built cover has no upload field on show; its errors go under the choice.
+      if (key === "cover_image" && coverMode() === "build") mapped = "cover_choice";
       if (setError(mapped, errors[key])) {
         if (!firstField) firstField = mapped;
       } else {
@@ -912,7 +1002,10 @@
 
   function showSuccess(includeEmail) {
     root.innerHTML = "";
-    step2Wrap = null;
+    stepsEl = null;
+    graphicWrap = null;
+    graphic = null;
+    emailWrap = null;
     var panel = el("div", { class: "cnl-ef-success", role: "status" });
     panel.appendChild(el("h3", { text: "Submitted!" }));
     panel.appendChild(el("p", {
@@ -933,7 +1026,300 @@
   }
 
   /* =====================================================================
-     STEP 2 — announcement email
+     STEPS — details → graphic (only when the submitter builds their cover)
+     → email, with an indicator above them.
+     ===================================================================== */
+
+  var STEPS = [["details", "Event details"], ["graphic", "Event graphic"], ["email", "Announcement email"]];
+
+  function buildSteps() {
+    stepsEl = el("ol", { class: "cnl-ef-steps", "aria-label": "Form steps" });
+    STEPS.forEach(function (s) {
+      if (s[0] === "graphic" && !GRAPHICS_BUILDER_URL) return;
+      var li = el("li", { class: "cnl-ef-step", "data-step": s[0] }, [
+        el("span", { class: "cnl-ef-step-num", "aria-hidden": "true" }),
+        el("span", { class: "cnl-ef-step-label", text: s[1] })
+      ]);
+      if (s[0] === "graphic") li.appendChild(el("span", { class: "cnl-ef-step-note", text: "(skipped: you're uploading your own)" }));
+      stepsEl.appendChild(li);
+    });
+    return stepsEl;
+  }
+
+  function paintSteps() {
+    if (!stepsEl) return;
+    var order = STEPS.map(function (s) { return s[0]; });
+    var at = order.indexOf(currentStep), n = 0;
+    stepsEl.querySelectorAll(".cnl-ef-step").forEach(function (li) {
+      var step = li.getAttribute("data-step"), i = order.indexOf(step);
+      var skipped = step === "graphic" && coverMode() !== "build";
+      var done = i < at && !skipped;
+      n += 1;
+      li.classList.toggle("cnl-ef-step--current", i === at);
+      li.classList.toggle("cnl-ef-step--done", done);
+      li.classList.toggle("cnl-ef-step--skipped", skipped);
+      li.querySelector(".cnl-ef-step-num").textContent = done ? "✓" : String(n);
+      if (i === at) li.setAttribute("aria-current", "step");
+      else li.removeAttribute("aria-current");
+    });
+  }
+
+  function showStep(which) {
+    currentStep = which;
+    formEl.style.display = which === "details" ? "" : "none";
+    if (graphicWrap) graphicWrap.style.display = which === "graphic" ? "" : "none";
+    if (emailWrap) emailWrap.style.display = which === "email" ? "" : "none";
+    paintSteps();
+    var top = root.getBoundingClientRect().top + window.pageYOffset - 16;
+    window.scrollTo({ top: Math.max(top, 0), behavior: "smooth" });
+  }
+
+  /** Save a Blob as a download. */
+  function saveFile(blob, name) {
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  }
+
+  /* =====================================================================
+     GRAPHIC STEP — the tools site's event graphics builder, framed
+     The builder runs in form mode (?mode=form, its form-mode.js): the
+     chapter is locked to this form's, and its Luma picker and download
+     buttons are hidden, since this step has its own. The two talk over
+     postMessage, each checking the other's origin:
+       form → builder   hello                  on every frame load, so the
+                                               builder knows where to answer
+                        fill {fields}          words from the details step
+                        png {id, fmt, width}   the design as a PNG
+       builder → form   ready                  fonts and chapter loaded
+                        size {height, wide}    its content height (a narrow
+                                               frame stacks, and grows to fit)
+                        png {id, ok, blob, name, error}
+     Words the submitter changes in the builder stay theirs: a fill only
+     replaces the ones they haven't edited there. "Use this graphic" keeps
+     the square as the cover, which /submit uploads to Luma exactly like a
+     cropped upload.
+     ===================================================================== */
+
+  var GRAPHIC_LOAD_TIMEOUT_MS = 25000;
+  var GRAPHIC_PNG_TIMEOUT_MS = 20000;
+
+  /** The builder's words for this event, set out like its own Luma prefill. */
+  function graphicFields(ev) {
+    var online = ev.event_format === "online";
+    var d = evDate(ev);
+    var code = presetChapter || val("chapter_code");
+    var ch = chapters.filter(function (c) { return c.code === code; })[0];
+    var title = ev.event_name;
+    // "Denver New Liberals — Fall Happy Hour": the logo already says who.
+    if (ch) {
+      var escaped = ch.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      title = title.replace(new RegExp("^\\s*" + escaped + "\\s*[—–\\-:|·]+\\s*", "i"), "");
+    }
+    // "1400 K St NW, Washington, DC 20005, USA" → street / city lines, no country.
+    var addr = String(ev.formatted_address || "").replace(/,\s*(USA|United States|UK|United Kingdom|Canada)\s*$/i, "");
+    var comma = addr.indexOf(",");
+    if (comma > 0) addr = addr.slice(0, comma + 1) + "\n" + addr.slice(comma + 1).trim();
+    return {
+      title: title,
+      venue: online ? "Online" : ev.venue_name,
+      addr: online ? "" : addr,
+      date: DOW[d.getDay()] + ", " + MON[d.getMonth()] + " " + d.getDate(),
+      time: fmtTime(ev.start_time, true).replace(" ", "")
+    };
+  }
+
+  function enterGraphicStep(ctx) {
+    lastCtx = ctx;
+    var code = presetChapter || val("chapter_code");
+    if (!graphicWrap) buildGraphicStep();
+    graphic.status.textContent = "";
+    showStep("graphic");
+    // A new chapter means new colours and artwork: start the builder over.
+    if (graphic.chapterCode !== code) loadGraphic(code);
+    else if (graphic.ready) fillGraphic();
+  }
+
+  function buildGraphicStep() {
+    graphicWrap = el("div", { class: "cnl-eg" });
+    var head = el("div", { class: "cnl-ee-head" });
+    head.appendChild(el("h3", { class: "cnl-ef-section", text: "Event graphic" }));
+    head.appendChild(el("p", {
+      class: "cnl-ef-hint",
+      text: "Pick a design, then click anything in the preview to change its color or its words. " +
+        "Your event details and chapter colors are already in. The square version becomes your Luma cover.",
+    }));
+    graphicWrap.appendChild(head);
+
+    var frame = el("iframe", { class: "cnl-eg-frame", title: "Event graphics builder" });
+    var loading = el("div", { class: "cnl-eg-loading", role: "status" });
+    graphicWrap.appendChild(el("div", { class: "cnl-eg-box" }, [frame, loading]));
+
+    var back = el("button", { type: "button", class: "cnl-ef-btn-small", text: "← Back to event details" });
+    back.addEventListener("click", function () { showStep("details"); });
+    var dl = el("button", { type: "button", class: "cnl-eg-btn-outline", text: "Download 4:5 portrait (optional)" });
+    var use = el("button", { type: "button", class: "cnl-ef-submit", text: "Use this graphic · next: email →" });
+    graphicWrap.appendChild(el("div", { class: "cnl-eg-bar" }, [back, el("div", { class: "cnl-eg-bar-end" }, [dl, use])]));
+    var status = el("p", { class: "cnl-ef-hint cnl-eg-status", role: "status", "aria-live": "polite" });
+    graphicWrap.appendChild(status);
+    var toUpload = el("button", { type: "button", class: "cnl-ef-linklike", text: "Rather use your own image? Upload it instead" });
+    toUpload.addEventListener("click", switchToUpload);
+    graphicWrap.appendChild(el("p", { class: "cnl-ef-hint cnl-eg-foot" }, [
+      document.createTextNode("The square is what goes to Luma. "), toUpload
+    ]));
+    root.insertBefore(graphicWrap, formEl.nextSibling);
+
+    graphic = {
+      frame: frame, loading: loading, status: status, use: use, dl: dl,
+      origin: new URL(GRAPHICS_BUILDER_URL).origin,
+      chapterCode: null, ready: false, cover: null,
+      seq: 0, pending: {}, loadTimer: null
+    };
+    frame.addEventListener("load", function () { postToGraphic({ type: "hello" }); });
+    use.addEventListener("click", useGraphic);
+    dl.addEventListener("click", downloadPortrait);
+  }
+
+  function loadGraphic(code) {
+    var g = graphic;
+    g.chapterCode = code;
+    g.ready = false;
+    g.cover = null;
+    Object.keys(g.pending).forEach(function (id) { g.pending[id].reject(new Error("The graphics builder reloaded — try again.")); });
+    g.pending = {};
+    graphicLoading("Loading the graphics builder…");
+    g.frame.style.height = "";
+    var u = new URL(GRAPHICS_BUILDER_URL);
+    u.searchParams.set("embed", "1");
+    u.searchParams.set("mode", "form");
+    u.searchParams.set("chapter", code);
+    g.frame.src = u.href;
+    clearTimeout(g.loadTimer);
+    g.loadTimer = setTimeout(graphicLoadFailed, GRAPHIC_LOAD_TIMEOUT_MS);
+  }
+
+  /** Cover the frame with a message (and keep the buttons off), or clear it. */
+  function graphicLoading(message) {
+    var g = graphic;
+    g.loading.innerHTML = "";
+    g.loading.style.display = message ? "" : "none";
+    g.use.disabled = !!message;
+    g.dl.disabled = !!message;
+    if (message) g.loading.appendChild(el("p", { text: message }));
+  }
+
+  // No "ready" in time: a network block, an outage, or a builder without
+  // form mode. Offer a retry and the upload route.
+  function graphicLoadFailed() {
+    if (!graphic || graphic.ready) return;
+    graphicLoading("The graphics builder didn't load. Check your connection and try again, or upload your own image instead.");
+    var retry = el("button", { type: "button", class: "cnl-ef-btn-small", text: "Try again" });
+    retry.addEventListener("click", function () { loadGraphic(graphic.chapterCode); });
+    var toUpload = el("button", { type: "button", class: "cnl-ef-linklike", text: "Upload your own image instead" });
+    toUpload.addEventListener("click", switchToUpload);
+    graphic.loading.appendChild(el("div", { class: "cnl-eg-loading-actions" }, [retry, toUpload]));
+  }
+
+  function postToGraphic(msg) {
+    var w = graphic && graphic.frame.contentWindow;
+    if (w) w.postMessage(Object.assign({ cnl: "event-form" }, msg), graphic.origin);
+  }
+
+  function fillGraphic() {
+    postToGraphic({ type: "fill", fields: graphicFields(collectEventData(lastCtx)) });
+  }
+
+  function requestGraphicPng(fmt, width) {
+    var g = graphic;
+    return new Promise(function (resolve, reject) {
+      var id = ++g.seq;
+      g.pending[id] = { resolve: resolve, reject: reject };
+      postToGraphic({ type: "png", id: id, fmt: fmt, width: width });
+      setTimeout(function () {
+        if (!g.pending[id]) return;
+        delete g.pending[id];
+        reject(new Error("The graphics builder didn't answer — try again in a moment."));
+      }, GRAPHIC_PNG_TIMEOUT_MS);
+    });
+  }
+
+  window.addEventListener("message", function (e) {
+    var g = graphic, m = e.data;
+    if (!g || e.source !== g.frame.contentWindow || e.origin !== g.origin) return;
+    if (!m || m.cnl !== "egb") return;
+    if (m.type === "ready") {
+      clearTimeout(g.loadTimer);
+      g.ready = true;
+      graphicLoading("");
+      fillGraphic();
+    } else if (m.type === "size" && typeof m.height === "number" && isFinite(m.height)) {
+      // Wide, the builder fits its panels to the frame's CSS height. Narrow,
+      // it stacks, so the frame grows to fit (capped, in case of a loop).
+      g.frame.style.height = m.wide ? "" : Math.min(Math.ceil(m.height), 8000) + "px";
+    } else if (m.type === "png" && g.pending[m.id]) {
+      var p = g.pending[m.id];
+      delete g.pending[m.id];
+      if (m.ok && m.blob instanceof Blob) p.resolve(m);
+      else p.reject(new Error(m.error || "The graphic couldn't be made — try again."));
+    }
+  });
+
+  function useGraphic() {
+    var g = graphic, label = g.use.textContent;
+    g.status.textContent = "";
+    g.use.disabled = true;
+    g.use.textContent = "Saving your graphic…";
+    requestGraphicPng("square", 1080)
+      .then(function (r) {
+        return coverPreviewOf(r.blob).then(function (preview) {
+          g.cover = { blob: r.blob, previewUrl: preview };
+        });
+      })
+      .then(function () {
+        g.use.disabled = false;
+        g.use.textContent = label;
+        enterEmailStep(lastCtx);
+      }, function (err) {
+        g.use.disabled = false;
+        g.use.textContent = label;
+        g.status.textContent = err.message;
+      });
+  }
+
+  function downloadPortrait() {
+    var g = graphic, label = g.dl.textContent;
+    g.status.textContent = "";
+    g.dl.disabled = true;
+    g.dl.textContent = "Making the 4:5…";
+    requestGraphicPng("portrait", 1080)
+      .then(function (r) {
+        saveFile(r.blob, r.name);
+        g.status.textContent = "Downloaded " + r.name + " (1080 × 1350).";
+      }, function (err) {
+        g.status.textContent = err.message;
+      })
+      .then(function () {
+        g.dl.disabled = false;
+        g.dl.textContent = label;
+      });
+  }
+
+  /** Back to the details with "upload my own" picked, at the upload field. */
+  function switchToUpload() {
+    var radio = root.querySelector('[name="cover_mode"][value="upload"]');
+    radio.checked = true;
+    radio.dispatchEvent(new Event("change"));
+    showStep("details");
+    var upload = root.querySelector('[data-field="cover_image"]');
+    if (upload) upload.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  /* =====================================================================
+     EMAIL STEP — announcement email
      Ported from the tools-site "event + email trial" (event-email-trial),
      now wired to the real pipeline: the rendered body HTML is submitted
      with the event; the Worker swaps the cover placeholder for the Luma
@@ -941,18 +1327,6 @@
      URL after approval (/email-draft), then files the email as a draft in
      the chapter's Action Network group.
      ===================================================================== */
-
-  function showStep(n) {
-    if (n === 1) {
-      if (step2Wrap) step2Wrap.style.display = "none";
-      formEl.style.display = "";
-    } else {
-      formEl.style.display = "none";
-      if (step2Wrap) step2Wrap.style.display = "";
-    }
-    var top = root.getBoundingClientRect().top + window.pageYOffset - 16;
-    window.scrollTo({ top: Math.max(top, 0), behavior: "smooth" });
-  }
 
   // ---------- roster-sheet brand data (colours, logos, socials) ----------
   function parseSheetCsv(text) {
@@ -1489,17 +1863,39 @@
 
   /* 600px square JPEG data URL for the preview only. The submitted HTML uses
      the cover placeholder; the Worker swaps in the Luma CDN URL of the same
-     1200px crop it uploads. */
-  function exportCoverPreview() {
-    if (!crop) return "";
+     cover it uploads (the built graphic, or the 1200px crop). */
+  function squarePreview(img, sx, sy, size) {
     var out = document.createElement("canvas");
     out.width = 600; out.height = 600;
     var ctx = out.getContext("2d");
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, 600, 600);
-    ctx.drawImage(crop.img, crop.box.x / crop.scale, crop.box.y / crop.scale, crop.box.size / crop.scale, crop.box.size / crop.scale, 0, 0, 600, 600);
+    ctx.drawImage(img, sx, sy, size, size, 0, 0, 600, 600);
     return out.toDataURL("image/jpeg", 0.82);
   }
+  function exportCoverPreview() {
+    if (coverMode() === "build") return graphic && graphic.cover ? graphic.cover.previewUrl : "";
+    if (!crop) return "";
+    return squarePreview(crop.img, crop.box.x / crop.scale, crop.box.y / crop.scale, crop.box.size / crop.scale);
+  }
+  /** The same preview for the built graphic, made once when it's saved. */
+  function coverPreviewOf(blob) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(blob), img = new Image();
+      img.onload = function () {
+        URL.revokeObjectURL(url);
+        resolve(squarePreview(img, 0, 0, Math.min(img.naturalWidth, img.naturalHeight)));
+      };
+      img.onerror = function () {
+        URL.revokeObjectURL(url);
+        reject(new Error("Couldn't read the graphic — try again."));
+      };
+      img.src = url;
+    });
+  }
+  /** The email step goes back to the graphic when there was one. */
+  function stepBeforeEmail() { return coverMode() === "build" ? "graphic" : "details"; }
+  function emailBackLabel() { return stepBeforeEmail() === "graphic" ? "← Back to event graphic" : "← Back to event details"; }
 
   /* Google Maps link for the venue — the templates wrap the address in it
      (whereHtml) so Gmail's own auto-link, default blue, never appears.
@@ -1539,28 +1935,30 @@
     coverPreviewUrl = exportCoverPreview();
 
     // Same chapter, editor already built: refresh the event snapshot and show.
-    if (step2Wrap && emailState && emailState.chapterCode === code) {
+    if (emailWrap && emailState && emailState.chapterCode === code) {
       emailState.event = collectEventData(ctx);
-      showStep(2);
+      var back = emailWrap.querySelector(".cnl-ee-back");
+      if (back) back.textContent = emailBackLabel();
+      showStep("email");
       if (emailState.render) emailState.render();
       renderTurnstile(root.querySelector(".cnl-ee-turnstile"));
       return;
     }
 
     // First entry, or the chapter changed: rebuild from scratch.
-    if (step2Wrap) {
+    if (emailWrap) {
       if (window.turnstile && tsWidgetId !== null) {
         try { window.turnstile.remove(tsWidgetId); } catch (err) { /* stale id */ }
         tsWidgetId = null;
       }
-      if (step2Wrap.parentNode) step2Wrap.parentNode.removeChild(step2Wrap);
-      step2Wrap = null;
+      if (emailWrap.parentNode) emailWrap.parentNode.removeChild(emailWrap);
+      emailWrap = null;
       emailState = null;
     }
-    step2Wrap = el("div", { class: "cnl-ee" });
-    step2Wrap.appendChild(el("p", { class: "cnl-ef-loading", text: "Loading your chapter's branding…" }));
-    root.appendChild(step2Wrap);
-    showStep(2);
+    emailWrap = el("div", { class: "cnl-ee" });
+    emailWrap.appendChild(el("p", { class: "cnl-ef-loading", text: "Loading your chapter's branding…" }));
+    root.appendChild(emailWrap);
+    showStep("email");
 
     loadBrandRows()
       .then(function (rows) {
@@ -1581,31 +1979,31 @@
         buildEmailEditor();
       })
       .catch(function () {
-        step2Wrap.innerHTML = "";
-        step2Wrap.appendChild(el("p", {
+        emailWrap.innerHTML = "";
+        emailWrap.appendChild(el("p", {
           class: "cnl-ef-error-banner",
           text: "Couldn't load your chapter's branding — check your connection and try again.",
         }));
         var row = el("div", { class: "cnl-ee-actions" });
-        var back = el("button", { type: "button", class: "cnl-ef-btn-small", text: "← Back to event details" });
-        back.addEventListener("click", function () { showStep(1); });
+        var back = el("button", { type: "button", class: "cnl-ef-btn-small", text: emailBackLabel() });
+        back.addEventListener("click", function () { showStep(stepBeforeEmail()); });
         var retry = el("button", { type: "button", class: "cnl-ef-btn-small", text: "Try again" });
         retry.addEventListener("click", function () {
-          if (step2Wrap.parentNode) step2Wrap.parentNode.removeChild(step2Wrap);
-          step2Wrap = null;
+          if (emailWrap.parentNode) emailWrap.parentNode.removeChild(emailWrap);
+          emailWrap = null;
           enterEmailStep(ctx);
         });
         row.appendChild(back);
         row.appendChild(retry);
-        step2Wrap.appendChild(row);
+        emailWrap.appendChild(row);
       });
   }
 
   // ---------- the email editor UI ----------
   function buildEmailEditor() {
     var brand = emailState.brand;
-    step2Wrap.innerHTML = "";
-    step2Wrap.appendChild(el("div", { class: "cnl-ef-banner", role: "alert", style: "display:none" }));
+    emailWrap.innerHTML = "";
+    emailWrap.appendChild(el("div", { class: "cnl-ef-banner", role: "alert", style: "display:none" }));
 
     var head = el("div", { class: "cnl-ee-head" });
     head.appendChild(el("h3", { class: "cnl-ef-section", text: "Announcement email" }));
@@ -1615,14 +2013,14 @@
         "After the event is approved, this lands as a DRAFT in your chapter's Action Network account " +
         "with the RSVP button linked to the new Luma event — nothing sends until you send it there.",
     }));
-    step2Wrap.appendChild(head);
+    emailWrap.appendChild(head);
 
     var editor = el("div", { class: "cnl-ee-editor" });
     var left = el("div", { class: "cnl-ee-pane" });
     var right = el("div", { class: "cnl-ee-pane cnl-ee-pane--preview" });
     editor.appendChild(left);
     editor.appendChild(right);
-    step2Wrap.appendChild(editor);
+    emailWrap.appendChild(editor);
 
     /* --- template picker --- */
     left.appendChild(el("h4", { class: "cnl-ee-h", text: "Template" }));
@@ -1818,14 +2216,8 @@
     var dlBtn = el("button", { type: "button", class: "cnl-ef-btn-small", text: "Download a browser preview" });
     dlBtn.addEventListener("click", function () {
       var blob = new Blob([wrapEmail(renderEmailBody(false), emailState.email.subject, emailState.canvas)], { type: "text/html" });
-      var a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = (emailState.chapterCode + "-" + emailState.event.event_name + "-" + emailState.templateId)
-        .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") + ".html";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+      saveFile(blob, (emailState.chapterCode + "-" + emailState.event.event_name + "-" + emailState.templateId)
+        .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") + ".html");
     });
     var dlRow = el("div", { class: "cnl-ee-dl" });
     dlRow.appendChild(dlBtn);
@@ -1836,8 +2228,8 @@
     right.appendChild(tsSlot);
 
     var actions = el("div", { class: "cnl-ee-actions" });
-    var backBtn = el("button", { type: "button", class: "cnl-ef-btn-small", text: "← Back to event details" });
-    backBtn.addEventListener("click", function () { showStep(1); });
+    var backBtn = el("button", { type: "button", class: "cnl-ef-btn-small cnl-ee-back", text: emailBackLabel() });
+    backBtn.addEventListener("click", function () { showStep(stepBeforeEmail()); });
     actions.appendChild(backBtn);
     right.appendChild(actions);
 

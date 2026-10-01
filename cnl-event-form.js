@@ -880,6 +880,7 @@
     if (coverMode() === "build" && !(graphic && graphic.cover)) {
       errors.cover_choice = "Your event graphic isn't saved yet — build it on the next page.";
     }
+    if (includeEmail && emailState) Object.assign(errors, scheduleErrors());
     if (Object.keys(errors).length) {
       renderErrors(errors);
       return;
@@ -942,6 +943,11 @@
         fd.append("email_subject", withEmail ? emailState.email.subject : "");
         fd.append("email_preheader", withEmail ? emailState.email.preheader : "");
         fd.append("email_body_html", withEmail ? renderEmailBody(true) : "");
+        // When CNL staff should send it, and any reminders (see buildSchedule).
+        var sched = withEmail ? scheduleFields() : {};
+        ["email_send_timing", "email_send_offset", "email_send_date", "email_reminders"].forEach(function (k) {
+          fd.append(k, sched[k] || "");
+        });
 
         // The Turnstile widget lives in the email step, outside the <form>.
         var ts = root.querySelector('[name="cf-turnstile-response"]');
@@ -1013,8 +1019,8 @@
         "appear on the Luma calendar and you'll get a host invite at the email you provided." +
         (includeEmail
           ? " Your announcement email will land as a draft in your chapter's Action Network " +
-            "account, with the RSVP button linked to the new event — review it there, send " +
-            "yourself a test, and send it to your list." +
+            "account, with the RSVP button linked to the new event. CNL staff send it on the " +
+            "schedule you picked; you can review it there before then." +
             (emailState && emailState.canvas
               ? " To get the background you previewed, set the draft's wrapper to “" +
                 canvasWrapperName(emailState.canvas) + "” in Action Network."
@@ -1941,6 +1947,7 @@
       if (back) back.textContent = emailBackLabel();
       showStep("email");
       if (emailState.render) emailState.render();
+      if (emailState.refreshSchedule) emailState.refreshSchedule();
       renderTurnstile(root.querySelector(".cnl-ee-turnstile"));
       return;
     }
@@ -1972,7 +1979,10 @@
           rolesByTpl: {}, logoChosen: {},
           templateId: EMAIL_TEMPLATES[0].id,
           mobilePreview: false,
-          render: null
+          render: null,
+          // "When should it go out?" answers; see buildSchedule.
+          schedule: { timing: "on_approval", offset: "2w", date: "", reminders: {} },
+          refreshSchedule: null
         };
         emailState.email = defaultEmail(emailState.event, brand);
         emailState.P = basePalette(brand);
@@ -2223,6 +2233,8 @@
     dlRow.appendChild(dlBtn);
     right.appendChild(dlRow);
 
+    buildSchedule(right);
+
     /* --- turnstile + actions --- */
     var tsSlot = el("div", { class: "cnl-ef-turnstile cnl-ee-turnstile" });
     right.appendChild(tsSlot);
@@ -2243,7 +2255,7 @@
     var skipRow = el("p", { class: "cnl-ee-skip" });
     skipRow.appendChild(skipBtn);
     right.appendChild(skipRow);
-    right.appendChild(el("p", { class: "cnl-ef-hint", text: "CNL staff review the event before anything goes live. The email never sends on its own — it waits as a draft in Action Network for you to test and send." }));
+    right.appendChild(el("p", { class: "cnl-ef-hint", text: "CNL staff review the event before anything goes live. The email never sends on its own: it waits as a draft in Action Network, and CNL staff send it on the schedule you picked above." }));
 
     renderTurnstile(tsSlot);
 
@@ -2261,6 +2273,149 @@
     }
     emailState.render = render;
     render();
+  }
+
+  /* ---------- "When should it go out?" + reminder emails ----------
+     Chapters often submit several events at once and don't want every
+     announcement to land the same day. Nothing here sends anything: the
+     answers ride along with the submission, the Worker (src/schedule.ts)
+     turns them into dates in the chapter's zone, and CNL staff send by hand.
+     Keep the option keys and day counts in step with schedule.ts. */
+  var SEND_OFFSETS = [["1w", 7, "1 week"], ["2w", 14, "2 weeks"], ["3w", 21, "3 weeks"], ["4w", 28, "4 weeks"]];
+  var REMINDER_OPTS = [["1w", 7, "A week before"], ["1d", 1, "The day before"], ["0d", 0, "The morning of the event"]];
+
+  function ymdAddDays(ymd, days) {
+    var p = ymd.split("-").map(Number);
+    return new Date(Date.UTC(p[0], p[1] - 1, p[2] + days)).toISOString().slice(0, 10);
+  }
+  function ymdToday() {
+    var d = new Date();
+    return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
+  }
+  function ymdLabel(ymd) {
+    var p = ymd.split("-").map(Number);
+    return new Date(Date.UTC(p[0], p[1] - 1, p[2])).toLocaleDateString("en-US",
+      { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+  }
+
+  /* The announcement's date, or "" for "as soon as it's approved". */
+  function scheduleSendDate() {
+    var sc = emailState.schedule;
+    var start = emailState.event.start_date;
+    var date = "";
+    if (sc.timing === "before_event" && start) {
+      var off = SEND_OFFSETS.filter(function (o) { return o[0] === sc.offset; })[0];
+      if (off) date = ymdAddDays(start, -off[1]);
+    } else if (sc.timing === "on_date") {
+      date = sc.date;
+    }
+    return date && date > ymdToday() ? date : "";
+  }
+
+  /* A reminder's date, or null when it wouldn't land after the announcement. */
+  function reminderDate(opt) {
+    var start = emailState.event.start_date;
+    if (!start) return null;
+    var date = ymdAddDays(start, -opt[1]);
+    return date > (scheduleSendDate() || ymdToday()) ? date : null;
+  }
+
+  function scheduleFields() {
+    var sc = emailState.schedule;
+    return {
+      email_send_timing: sc.timing,
+      email_send_offset: sc.timing === "before_event" ? sc.offset : "",
+      email_send_date: sc.timing === "on_date" ? sc.date : "",
+      email_reminders: REMINDER_OPTS.filter(function (o) {
+        return sc.reminders[o[0]] && reminderDate(o);
+      }).map(function (o) { return o[0]; }).join(","),
+    };
+  }
+
+  function scheduleErrors() {
+    var sc = emailState.schedule;
+    var start = emailState.event.start_date;
+    if (sc.timing !== "on_date") return {};
+    if (!sc.date) return { email_send_date: "Pick the date the email should go out." };
+    if (start && sc.date > start) return { email_send_date: "The email has to go out on or before the day of the event." };
+    return {};
+  }
+
+  function buildSchedule(host) {
+    var sc = emailState.schedule;
+    host.appendChild(el("h4", { class: "cnl-ee-h", text: "When should it go out?" }));
+    host.appendChild(el("p", {
+      class: "cnl-ef-hint",
+      text: "Sending in several events at once? Space the emails out so each one lands when it's most useful. CNL staff send it on the day you choose.",
+    }));
+
+    var group = el("div", { class: "cnl-ef-field cnl-ee-sched", "data-field": "email_send_timing", role: "radiogroup", "aria-label": "When the email goes out" });
+    host.appendChild(group);
+    function radioRow(value, children) {
+      var radio = el("input", { type: "radio", name: "cnl_ee_send_timing", value: value });
+      radio.addEventListener("change", function () { sc.timing = value; refresh(); });
+      group.appendChild(el("label", { class: "cnl-ef-check cnl-ee-sched__row" }, [radio].concat(children)));
+    }
+    radioRow("on_approval", [el("span", { text: "As soon as the event is approved" })]);
+
+    var offsetSel = el("select", { class: "cnl-ef-input", "aria-label": "How long before the event" });
+    SEND_OFFSETS.forEach(function (o) { offsetSel.appendChild(el("option", { value: o[0], text: o[2] })); });
+    offsetSel.value = sc.offset;
+    offsetSel.addEventListener("change", function () { sc.offset = offsetSel.value; sc.timing = "before_event"; refresh(); });
+    var offsetNote = el("span", { class: "cnl-ee-sched__note" });
+    radioRow("before_event", [offsetSel, el("span", { text: "before the event" }), offsetNote]);
+
+    var dateInput = el("input", { type: "date", class: "cnl-ef-input", "aria-label": "Send date" });
+    dateInput.value = sc.date;
+    dateInput.addEventListener("input", function () {
+      sc.date = dateInput.value;
+      sc.timing = "on_date";
+      setError("email_send_date", "");
+      refresh();
+    });
+    radioRow("on_date", [el("span", { text: "On a date I pick" }), dateInput]);
+    group.appendChild(el("p", { class: "cnl-ef-inline-error", role: "alert", "aria-live": "polite" }));
+    var dateErr = el("div", { class: "cnl-ef-field", "data-field": "email_send_date" });
+    dateErr.appendChild(el("p", { class: "cnl-ef-inline-error", role: "alert", "aria-live": "polite" }));
+    host.appendChild(dateErr);
+
+    var rem = el("div", { class: "cnl-ef-field cnl-ee-sched", "data-field": "email_reminders" });
+    host.appendChild(rem);
+    rem.appendChild(el("p", { class: "cnl-ef-label", text: "Reminder emails (optional)" }));
+    rem.appendChild(el("p", { class: "cnl-ef-hint", text: "Want a nudge closer to the day? Tick any you'd like, and CNL staff will send a short reminder version of this email." }));
+    var remRows = REMINDER_OPTS.map(function (o) {
+      var box = el("input", { type: "checkbox", value: o[0] });
+      box.checked = !!sc.reminders[o[0]];
+      box.addEventListener("change", function () { sc.reminders[o[0]] = box.checked; });
+      var note = el("span", { class: "cnl-ee-sched__note" });
+      var row = el("label", { class: "cnl-ef-check cnl-ee-sched__row" }, [box, el("span", { text: o[2] }), note]);
+      rem.appendChild(row);
+      return { opt: o, box: box, note: note, row: row };
+    });
+    rem.appendChild(el("p", { class: "cnl-ef-inline-error", role: "alert", "aria-live": "polite" }));
+
+    // Every date here hangs off the event's start date, which changes if the
+    // submitter goes back to the details, so all of it is redrawn on entry.
+    function refresh() {
+      var start = emailState.event.start_date;
+      var today = ymdToday();
+      group.querySelectorAll('input[type="radio"]').forEach(function (r) { r.checked = r.value === sc.timing; });
+      dateInput.min = today;
+      if (start) dateInput.max = start;
+      var off = SEND_OFFSETS.filter(function (o) { return o[0] === sc.offset; })[0];
+      var offDate = start && off ? ymdAddDays(start, -off[1]) : "";
+      offsetNote.textContent = !offDate ? "" : offDate > today
+        ? "(" + ymdLabel(offDate) + ")"
+        : "(already passed, so it goes out on approval)";
+      remRows.forEach(function (r) {
+        var date = reminderDate(r.opt);
+        r.box.disabled = !date;
+        r.row.classList.toggle("is-off", !date);
+        r.note.textContent = date ? "(" + ymdLabel(date) + ")" : "(too close to the announcement)";
+      });
+    }
+    emailState.refreshSchedule = refresh;
+    refresh();
   }
 
   // ---------- boot ----------

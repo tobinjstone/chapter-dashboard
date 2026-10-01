@@ -684,6 +684,39 @@
   opacity: 0.6;
 }
 
+/* "When should it go out?" + reminders */
+.cnl-event-form .cnl-ee-sched {
+  margin-bottom: 4px;
+}
+
+.cnl-event-form .cnl-ee-sched__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin: 8px 0;
+}
+
+.cnl-event-form .cnl-ee-sched__row .cnl-ef-input {
+  width: auto;
+  padding: 5px 8px;
+  font-size: 0.95em;
+}
+
+.cnl-event-form .cnl-ee-sched__note {
+  color: #5a5f72;
+  font-size: 0.92em;
+}
+
+.cnl-event-form .cnl-ee-sched__row.is-off {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.cnl-event-form .cnl-ee-sched + .cnl-ef-field .cnl-ef-inline-error:empty {
+  margin: 0;
+}
+
 /* actions */
 .cnl-event-form .cnl-ee-dl {
   margin-top: 12px;

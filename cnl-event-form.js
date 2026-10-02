@@ -141,6 +141,21 @@
     return input ? input.value.trim() : "";
   }
 
+  /** "yes" / "no", or "" until the submitter answers the cost question. */
+  function costOverLimit() {
+    var checked = root.querySelector('[name="cost_over_limit"]:checked');
+    return checked ? checked.value : "";
+  }
+
+  /** "$1,250.50" → 1250.5; null unless it's a positive dollar amount.
+   *  Mirrors parseCost in the Worker's validate.ts. */
+  function parseCost(raw) {
+    var s = String(raw || "").replace(/[\s$,]/g, "");
+    if (!/^\d+(\.\d{1,2})?$/.test(s)) return null;
+    var n = Number(s);
+    return n > 0 && n <= 1000000 ? n : null;
+  }
+
   /**
    * Custom time picker: hour / minute / AM-PM selects, minutes limited to
    * 15-minute stops. Native <input type=time> can't constrain its minute
@@ -370,10 +385,31 @@
     var addCohost = el("button", { type: "button", class: "cnl-ef-btn-small", text: "+ Add a co-host" });
     colB.appendChild(addCohost);
 
+    // Cost: a required yes/no; "yes" opens the estimate (refreshCost below).
+    colB.appendChild(el("h3", { class: "cnl-ef-section", text: "Cost" }));
+    var costWrap = el("div", { class: "cnl-ef-field", "data-field": "cost_over_limit" });
+    costWrap.appendChild(el("span", { class: "cnl-ef-label", text: "Will this event cost more than $250 (small chapters) or $500 (large chapters)?" }));
+    costWrap.appendChild(el("p", { class: "cnl-ef-hint", text: "Count everything: venue or room rental, deposits, food and drink, speaker fees, A/V, printing. If you're not sure whether your chapter is small or large, use $250." }));
+    var costGroup = el("div", { class: "cnl-ef-radio-row", role: "radiogroup", "aria-label": "Will this event cost more than the limit?" });
+    [["no", "No, it'll stay under that"], ["yes", "Yes, it'll cost more"]].forEach(function (pair) {
+      costGroup.appendChild(el("label", { class: "cnl-ef-radio" }, [
+        el("input", { type: "radio", name: "cost_over_limit", value: pair[0] }),
+        document.createTextNode(" " + pair[1])
+      ]));
+    });
+    costWrap.appendChild(costGroup);
+    costWrap.appendChild(el("p", { class: "cnl-ef-inline-error", role: "alert", "aria-live": "polite" }));
+    colB.appendChild(costWrap);
+    var costField = field("estimated_cost", "Estimated total cost (US dollars)",
+      el("input", { type: "text", name: "estimated_cost", class: "cnl-ef-input", inputmode: "decimal", placeholder: "e.g. 750", autocomplete: "off" }),
+      "A rough number is fine. Break it down in the notes below.");
+    costField.style.display = "none";
+    colB.appendChild(costField);
+
     // Reviewer notes + passcode
     colB.appendChild(field("reviewer_notes", "Notes for the reviewer (optional)",
-      el("textarea", { name: "reviewer_notes", class: "cnl-ef-input", rows: "3" }),
-      "Only CNL staff see this. Feel free to add any details such as estimated cost, speakers, etc."));
+      el("textarea", { name: "reviewer_notes", class: "cnl-ef-input", rows: "4" }),
+      "Only CNL staff see this. If the event has costs, tell us what they are: venue rental or room fees, deposits, food and drink minimums, speaker fees, equipment rental. Also mention speakers, partner organizations, or anything else we should know."));
     if (passcodeRequired) {
       colB.appendChild(field("passcode", "Submission passcode",
         el("input", { type: "password", name: "passcode", class: "cnl-ef-input", autocomplete: "off" }),
@@ -408,6 +444,16 @@
       r.addEventListener("change", refreshFormat);
     });
     refreshFormat();
+
+    function refreshCost() {
+      var over = costOverLimit() === "yes";
+      costField.style.display = over ? "" : "none";
+      if (!over) setError("estimated_cost", "");
+      if (costOverLimit()) setError("cost_over_limit", "");
+    }
+    form.querySelectorAll('[name="cost_over_limit"]').forEach(function (r) {
+      r.addEventListener("change", refreshCost);
+    });
 
     function refreshTzHint() {
       var code = presetChapter || val("chapter_code");
@@ -862,6 +908,11 @@
         errors["cohost_" + i + "_email"] = "Co-host email is missing or invalid.";
       }
     }
+    if (!costOverLimit()) {
+      errors.cost_over_limit = "Let us know whether the event will cost more than that.";
+    } else if (costOverLimit() === "yes" && parseCost(val("estimated_cost")) === null) {
+      errors.estimated_cost = "Enter the estimated total in dollars, e.g. 750.";
+    }
     if (passcodeRequired && !val("passcode")) errors.passcode = "The passcode is required.";
     return errors;
   }
@@ -907,6 +958,8 @@
         fd.append("end_time", composeTime("end_time"));
         fd.append("event_format", fmt);
         fd.append("event_type", val("event_type"));
+        fd.append("cost_over_limit", costOverLimit());
+        fd.append("estimated_cost", costOverLimit() === "yes" ? val("estimated_cost") : "");
         if (fmt !== "online") {
           if (ctx.manualMode) {
             fd.append("address_source", "manual");

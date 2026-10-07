@@ -24,7 +24,7 @@ const SIGNUP_JS = path.join(REPO_ROOT, '..', 'cnl-action-network-forms', 'src', 
 const SIGNUP_UPSTREAM = process.env.SIGNUP_UPSTREAM || '';
 const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0wq0Bm6gQrgX_Th252L2h9B1GzPQS_SeWg-_JrNi6ynm7CHGcuLw-RjmWC4M5Yg-KMXjvNN0d8ZVe/pub?gid=0&single=true&output=csv';
 
-const WATCHED_ASSETS = ['chapter.css', 'chapter.js', 'cnl-events-widget.css', 'cnl-events.js', 'cnl-event-form.css', 'cnl-event-form.js'];
+const WATCHED_ASSETS = ['chapter.css', 'chapter.js', 'cnl-events-widget.css', 'cnl-events.js'];
 
 // ---------- tiny CSV parser (handles quoted fields) ----------
 function parseCSV(text) {

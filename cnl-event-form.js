@@ -45,6 +45,15 @@
   var selectedPlace = null; // {placeId, venueName, formattedAddress, lat, lng}
   var crop = null; // {img, canvas, box:{x,y,size}, scale, isPng, hasAlpha}
   var submitting = false;
+  // When the form loaded. The Worker gets the elapsed time (fill_ms) as a
+  // spam signal: a real lead takes minutes, a bot seconds. Autofill can't
+  // trip a timer the way it tripped the old website_url honeypot.
+  var formStartedAt = Date.now();
+
+  // Spam trap input name. Deliberately meaningless: the old "website_url"
+  // matched password-manager "website" slots and was autofilled by real
+  // leads (Oct 2026). MUST match the Worker's TRAP_FIELD.
+  var TRAP_FIELD = "cnl_ef_x7";
 
   // Steps: "details" (the <form>) → "graphic" (only when the submitter builds
   // their cover) → "email". Every step's container stays in the DOM, hidden.
@@ -202,16 +211,28 @@
 
     form.appendChild(el("div", { class: "cnl-ef-banner", role: "alert", style: "display:none" }));
 
-    // Honeypot: visually removed via CSS, not type=hidden, so naive bots fill it.
-    var honeypot = el("input", {
+    // Spam trap: bots that fill every input fill it; people never see it. It
+    // must be invisible to autofill too, which off-screen positioning is not
+    // (browsers and password managers fill off-screen fields; that silently
+    // lost real events, Oct 2026). So: a display:none wrapper (unfocusable,
+    // which every browser's autofill skips; inline so it holds even if the
+    // CSS doesn't load), a meaningless name, an autocomplete token no browser
+    // recognises (Chrome then suppresses filling; "off" is ignored), and the
+    // password managers' own opt-out attributes. A hit only flags the event
+    // for reviewers; the Worker never drops it.
+    var trapWrap = el("div", { class: "cnl-ef-hp", style: "display:none", "aria-hidden": "true" });
+    trapWrap.appendChild(el("input", {
       type: "text",
-      name: "website_url",
-      class: "cnl-ef-hp",
+      name: TRAP_FIELD,
       tabindex: "-1",
-      autocomplete: "off",
-      "aria-hidden": "true",
-    });
-    form.appendChild(honeypot);
+      autocomplete: "cnl-trap",
+      "data-1p-ignore": "true",
+      "data-lpignore": "true",
+      "data-bwignore": "true",
+      "data-form-type": "other",
+      "data-protonpass-ignore": "true",
+    }));
+    form.appendChild(trapWrap);
 
     // Two fixed columns on desktop (see CSS media query): A holds everything
     // through the location/meeting fields, B the rest. They stack on mobile.
@@ -951,9 +972,10 @@
         ["submitter_name", "submitter_email", "event_name", "description",
           "start_date", "end_date",
           "location_note", "meeting_url", "max_capacity", "reviewer_notes",
-          "passcode", "website_url"].forEach(function (n) {
+          "passcode", TRAP_FIELD].forEach(function (n) {
             fd.append(n, val(n));
           });
+        fd.append("fill_ms", String(Date.now() - formStartedAt));
         fd.append("start_time", composeTime("start_time"));
         fd.append("end_time", composeTime("end_time"));
         fd.append("event_format", fmt);

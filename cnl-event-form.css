@@ -339,14 +339,11 @@
   margin: 0 0 10px;
 }
 
-/* Honeypot: pulled out of the visual and accessibility flow WITHOUT
-   display:none, so autofill bots still see a fillable text input. */
+/* Spam trap wrapper: display:none so it's unfocusable, which every
+   browser's autofill skips. (The old off-screen version got autofilled by
+   real leads.) Also set inline in the JS, in case this file doesn't load. */
 .cnl-event-form .cnl-ef-hp {
-  position: absolute !important;
-  left: -9999px !important;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
+  display: none !important;
 }
 
 @media (max-width: 480px) {
